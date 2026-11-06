@@ -1,0 +1,61 @@
+name: authzbench
+
+x-postgres: &postgres
+  image: postgres:17@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3
+  environment:
+    POSTGRES_PASSWORD: authzbench
+  healthcheck:
+    test: ["CMD", "pg_isready", "-U", "postgres"]
+    interval: 1s
+    timeout: 5s
+    retries: 30
+
+x-spicedb: &spicedb
+  image: authzed/spicedb:v1.57.0@sha256:a170d372c9f6b921bb6849064df6ca3566dd5b174882c1a2c4300c2ae1d60efd
+  environment:
+    SPICEDB_DATASTORE_ENGINE: postgres
+    SPICEDB_DATASTORE_CONN_URI: postgres://postgres:authzbench@spicedb-postgres:5432/postgres?sslmode=disable
+    SPICEDB_GRPC_PRESHARED_KEY: authzbench
+
+x-openfga: &openfga
+  image: openfga/openfga:v1.22.1@sha256:b852071314f1fda1194d341a6ebac0a4f619b3cd87a6626d2ccc7048af4ec671
+  environment:
+    OPENFGA_DATASTORE_ENGINE: postgres
+    OPENFGA_DATASTORE_URI: postgres://postgres:authzbench@openfga-postgres:5432/postgres?sslmode=disable
+    OPENFGA_CHECK_QUERY_CACHE_ENABLED: "true"
+    OPENFGA_PLAYGROUND_ENABLED: "false"
+
+services:
+  spicedb-postgres: *postgres
+
+  spicedb-migrate:
+    <<: *spicedb
+    command: ["datastore", "migrate", "head"]
+    depends_on:
+      spicedb-postgres:
+        condition: service_healthy
+
+  spicedb:
+    <<: *spicedb
+    command: ["serve"]
+    ports: ["50051:50051"]
+    depends_on:
+      spicedb-migrate:
+        condition: service_completed_successfully
+
+  openfga-postgres: *postgres
+
+  openfga-migrate:
+    <<: *openfga
+    command: ["migrate"]
+    depends_on:
+      openfga-postgres:
+        condition: service_healthy
+
+  openfga:
+    <<: *openfga
+    command: ["run"]
+    ports: ["8080:8080", "8081:8081"]
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
