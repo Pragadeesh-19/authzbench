@@ -60,8 +60,15 @@ def test_the_race_restores_the_revoked_relationship(dataset, virtual_clock):
     assert engine.check(dataset.revocation.probe, Consistency.FRESH)
 
 
+def test_a_race_waits_for_the_previous_restore_to_become_visible(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=300 * MILLIS, extra_latency_ns=CHECK_COST)
+    race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, SECOND, virtual_clock)
+    result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, SECOND, virtual_clock)
+    assert result.staleness_ns == 300 * MILLIS
+
+
 def test_a_probe_denied_before_the_revoke_is_refused(dataset, virtual_clock):
-    engine = _engine(dataset, virtual_clock)
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=CHECK_COST)
     engine.write(Change.remove(dataset.revocation.revoke))
     with pytest.raises(MeasurementError, match="denied before the revoke"):
         race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)

@@ -69,10 +69,10 @@ def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenar
                     cap_ns: int, clock: Clock = SYSTEM_CLOCK) -> RevocationResult:
     """Time from the revoke's acknowledgement to the first check, started after it, that denies.
 
-    The resolution is the gap between that check's start and the one before it; the write time runs from issuing
-    the revoke to its acknowledgement."""
-    if not checker.check(scenario.probe, consistency):
-        raise MeasurementError(f"{scenario.probe} is denied before the revoke")
+    The race starts once the probe is allowed at the given consistency, waiting at most the cap for an earlier
+    race's restore to become visible. The resolution is the gap between the denying check's start and the one
+    before it; the write time runs from issuing the revoke to its acknowledgement."""
+    _await_grant(checker, scenario.probe, consistency, cap_ns, clock)
     issued = clock.now()
     revision = writer.write(Change.remove(scenario.revoke))
     acknowledged = previous_start = clock.now()
@@ -87,3 +87,10 @@ def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenar
             previous_start = started
     finally:
         writer.write(Change.add(scenario.revoke))
+
+
+def _await_grant(checker: Checker, probe: CheckQuery, consistency: Consistency, cap_ns: int, clock: Clock) -> None:
+    deadline = clock.now() + cap_ns
+    while not checker.check(probe, consistency):
+        if clock.now() > deadline:
+            raise MeasurementError(f"{probe} is denied before the revoke for longer than the cap")
