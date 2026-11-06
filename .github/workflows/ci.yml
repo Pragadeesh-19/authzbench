@@ -33,7 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ["1.24.x", "stable"]
+        go: ["1.25.x", "stable"]
     defaults:
       run:
         shell: bash
@@ -54,3 +54,31 @@ jobs:
 
       - name: Tests
         run: go test -count=1 ./...
+
+  services:
+    name: services (SpiceDB and OpenFGA adapters)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Start SpiceDB and OpenFGA on PostgreSQL
+        run: docker compose -f services/compose.yaml up --detach --wait spicedb openfga
+
+      - name: Adapter tests against the real servers
+        working-directory: go
+        env:
+          AUTHZBENCH_SPICEDB_ENDPOINT: localhost:50051
+          AUTHZBENCH_OPENFGA_URL: http://localhost:8080
+        run: go test -count=1 -v ./engines/spicedb/ ./engines/openfga/
+
+      - name: Server logs
+        if: failure()
+        run: docker compose -f services/compose.yaml logs
