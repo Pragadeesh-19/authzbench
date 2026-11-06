@@ -48,14 +48,14 @@ def test_a_fresh_check_denies_on_the_first_check_after_the_acknowledgement(datas
 
 
 def test_a_revoke_never_seen_inside_the_cap_is_reported_as_capped(dataset, virtual_clock):
-    engine = _engine(dataset, virtual_clock, staleness_ns=300 * MILLIS, extra_latency_ns=CHECK_COST)
+    engine = _engine(dataset, virtual_clock, staleness_ns=150 * MILLIS, extra_latency_ns=CHECK_COST)
     result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 100 * MILLIS, virtual_clock)
     assert result.capped
     assert result.resolution_ns == CHECK_COST
 
 
 def test_the_race_restores_the_revoked_relationship(dataset, virtual_clock):
-    engine = _engine(dataset, virtual_clock)
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=CHECK_COST)
     race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)
     assert engine.check(dataset.revocation.probe, Consistency.FRESH)
 
