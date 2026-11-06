@@ -1,0 +1,2 @@
+document:d1#view@user:u1 allow
+document:d1#view@user:u2 deny

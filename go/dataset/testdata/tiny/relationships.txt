@@ -1,0 +1,5 @@
+group:revocation-team#member@user:revocation-target
+folder:revocation-root#viewer@group:revocation-team#member
+document:revocation-target#parent@folder:revocation-root
+document:nesting-target#viewer@user:nesting-leaf
+document:d1#viewer@user:u1
