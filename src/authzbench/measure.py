@@ -25,6 +25,7 @@ class OpenLoopResult:
 class RevocationResult:
     staleness_ns: int | None
     resolution_ns: int
+    write_ns: int
     cap_ns: int
 
     @property
@@ -68,18 +69,21 @@ def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenar
                     cap_ns: int, clock: Clock = SYSTEM_CLOCK) -> RevocationResult:
     """Time from the revoke's acknowledgement to the first check, started after it, that denies.
 
-    The resolution is the gap between that check's start and the one before it."""
+    The resolution is the gap between that check's start and the one before it; the write time runs from issuing
+    the revoke to its acknowledgement."""
     if not checker.check(scenario.probe, consistency):
         raise MeasurementError(f"{scenario.probe} is denied before the revoke")
+    issued = clock.now()
     revision = writer.write(Change.remove(scenario.revoke))
     acknowledged = previous_start = clock.now()
+    write_ns = acknowledged - issued
     try:
         while True:
             started = clock.now()
             if started - acknowledged > cap_ns:
-                return RevocationResult(None, started - previous_start, cap_ns)
+                return RevocationResult(None, started - previous_start, write_ns, cap_ns)
             if not checker.check(scenario.probe, consistency, revision):
-                return RevocationResult(started - acknowledged, started - previous_start, cap_ns)
+                return RevocationResult(started - acknowledged, started - previous_start, write_ns, cap_ns)
             previous_start = started
     finally:
         writer.write(Change.add(scenario.revoke))

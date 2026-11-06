@@ -86,7 +86,19 @@ def test_the_open_loop_counts_a_stall_that_the_closed_loop_hides(dataset, virtua
     assert opened.latency.count == 1_000
 
 
-def test_the_system_clock_never_reports_more_staleness_than_the_resolution_allows(dataset):
+def test_the_system_clock_measures_a_real_staleness_within_the_stated_resolution(dataset):
     engine = _engine(dataset, SYSTEM_CLOCK, staleness_ns=500 * MILLIS)
     result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 5 * SECOND)
+    assert result.staleness_ns + result.write_ns >= 500 * MILLIS
     assert result.staleness_ns <= 500 * MILLIS + result.resolution_ns
+
+
+def test_the_write_time_is_measured_from_issue_to_acknowledgement(dataset, virtual_clock):
+    class SlowWriter:
+        def write(self, change):
+            virtual_clock.wait_until(virtual_clock.now() + 3 * MILLIS)
+            return engine.write(change)
+
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=CHECK_COST)
+    result = race_revocation(SlowWriter(), engine, dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)
+    assert result.write_ns == 3 * MILLIS

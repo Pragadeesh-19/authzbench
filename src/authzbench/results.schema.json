@@ -87,11 +87,12 @@
         "revocation": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["placement", "staleness_ns", "resolution_ns", "cap_ns"],
+          "required": ["placement", "staleness_ns", "resolution_ns", "write_ns", "cap_ns"],
           "properties": {
             "placement": {"enum": ["in_process", "second_machine"]},
             "staleness_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
             "resolution_ns": {"$ref": "#/$defs/nanoseconds"},
+            "write_ns": {"$ref": "#/$defs/nanoseconds"},
             "cap_ns": {"type": "integer", "minimum": 1}
           }
         }
