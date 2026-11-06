@@ -7,7 +7,7 @@ from authzbench.dataset import Dataset
 from authzbench.engine import Consistency, Revision
 from authzbench.reference import ReferenceEvaluator, RelationshipStore
 from authzbench.relationships import Change, CheckQuery
-from authzbench.timing import Clock, monotonic_ns, wait_until
+from authzbench.timing import SYSTEM_CLOCK, Clock
 
 
 @dataclass(frozen=True)
@@ -25,10 +25,10 @@ class CalibrationEngine:
     name = "calibration"
     version = "1"
 
-    def __init__(self, profile: CalibrationProfile, clock: Clock = monotonic_ns) -> None:
+    def __init__(self, profile: CalibrationProfile, clock: Clock = SYSTEM_CLOCK) -> None:
         self._profile = profile
         self._clock = clock
-        self._started = clock()
+        self._started = clock.now()
         self._store = RelationshipStore()
         self._evaluator: ReferenceEvaluator | None = None
         self._pending: deque[tuple[int, Change]] = deque()
@@ -42,16 +42,16 @@ class CalibrationEngine:
         self._evaluator = ReferenceEvaluator(dataset.model, self._store)
 
     def write(self, change: Change) -> Revision:
-        self._pending.append((self._clock() + self._profile.staleness_ns, change))
+        self._pending.append((self._clock.now() + self._profile.staleness_ns, change))
         self._revision += 1
         return Revision(self._revision)
 
     def check(self, query: CheckQuery, consistency: Consistency, after: Revision | None = None) -> bool:
-        started = self._clock()
+        started = self._clock.now()
         self._wait_out_stall(started)
-        self._apply_pending(visible_before=None if consistency is Consistency.FRESH else self._clock())
+        self._apply_pending(visible_before=None if consistency is Consistency.FRESH else self._clock.now())
         allowed = self._require_loaded().check(query)
-        wait_until(started + self._profile.extra_latency_ns, self._clock)
+        self._clock.wait_until(started + self._profile.extra_latency_ns)
         return allowed
 
     def close(self) -> None:
@@ -62,7 +62,7 @@ class CalibrationEngine:
             return
         phase = (now - self._started) % self._profile.stall_period_ns
         if phase < self._profile.stall_duration_ns:
-            wait_until(now + self._profile.stall_duration_ns - phase, self._clock)
+            self._clock.wait_until(now + self._profile.stall_duration_ns - phase)
 
     def _apply_pending(self, visible_before: int | None) -> None:
         while self._pending and (visible_before is None or self._pending[0][0] <= visible_before):

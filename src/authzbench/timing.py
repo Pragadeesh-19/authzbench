@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 from hdrh.histogram import HdrHistogram
 
-Clock = Callable[[], int]
 NANOS_PER_SECOND = 1_000_000_000
 _SPIN_BEFORE_DEADLINE_NS = 2_000_000
 _LOWEST_NS = 1
@@ -14,17 +13,28 @@ _HIGHEST_NS = 600 * NANOS_PER_SECOND
 _SIGNIFICANT_DIGITS = 3
 
 
-def monotonic_ns() -> int:
-    return time.perf_counter_ns()
+class Clock(Protocol):
+    def now(self) -> int: ...
+
+    def wait_until(self, deadline_ns: int) -> None: ...
 
 
-def wait_until(deadline_ns: int, clock: Clock = monotonic_ns) -> None:
-    while True:
-        remaining = deadline_ns - clock()
-        if remaining <= 0:
-            return
-        if remaining > _SPIN_BEFORE_DEADLINE_NS:
-            time.sleep((remaining - _SPIN_BEFORE_DEADLINE_NS) / NANOS_PER_SECOND)
+class SystemClock:
+    """The process's monotonic clock; waits sleep until shortly before the deadline and spin the rest."""
+
+    def now(self) -> int:
+        return time.perf_counter_ns()
+
+    def wait_until(self, deadline_ns: int) -> None:
+        while True:
+            remaining = deadline_ns - self.now()
+            if remaining <= 0:
+                return
+            if remaining > _SPIN_BEFORE_DEADLINE_NS:
+                time.sleep((remaining - _SPIN_BEFORE_DEADLINE_NS) / NANOS_PER_SECOND)
+
+
+SYSTEM_CLOCK = SystemClock()
 
 
 @dataclass(frozen=True)

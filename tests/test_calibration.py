@@ -6,10 +6,13 @@ from authzbench.engines.calibration import CalibrationEngine, CalibrationProfile
 from authzbench.generator import generate
 from authzbench.measure import MeasurementError, open_loop, race_revocation, service_time
 from authzbench.relationships import Change
+from authzbench.timing import SYSTEM_CLOCK
 
-MILLIS = 1_000_000
+MICROS = 1_000
+MILLIS = 1_000 * MICROS
 SECOND = 1_000 * MILLIS
-SCHEDULING_TOLERANCE = 20 * MILLIS
+CHECK_COST = 100 * MICROS
+HISTOGRAM_PRECISION = 0.001
 
 
 @pytest.fixture(scope="module")
@@ -17,8 +20,8 @@ def dataset():
     return generate(SCALES["S"], seed=1)
 
 
-def _engine(dataset, **profile) -> CalibrationEngine:
-    engine = CalibrationEngine(CalibrationProfile(**profile))
+def _engine(dataset, clock, **profile) -> CalibrationEngine:
+    engine = CalibrationEngine(CalibrationProfile(**profile), clock)
     engine.load(dataset)
     return engine
 
@@ -27,49 +30,63 @@ def _queries(dataset):
     return [expectation.query for expectation in dataset.expectations[:200]]
 
 
-def test_a_known_staleness_is_measured_within_the_stated_resolution(dataset):
-    engine = _engine(dataset, staleness_ns=500 * MILLIS)
-    result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, cap_ns=5 * SECOND)
-    assert 500 * MILLIS <= result.staleness_ns <= 500 * MILLIS + result.resolution_ns + SCHEDULING_TOLERANCE
+def _close_to(measured: int, expected: int) -> bool:
+    return abs(measured - expected) <= expected * HISTOGRAM_PRECISION
 
 
-def test_a_fresh_check_sees_the_revoke_at_once(dataset):
-    engine = _engine(dataset, staleness_ns=500 * MILLIS)
-    result = race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, cap_ns=5 * SECOND)
-    assert result.staleness_ns < SCHEDULING_TOLERANCE
+def test_a_known_staleness_is_measured_exactly(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=500 * MILLIS, extra_latency_ns=CHECK_COST)
+    result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 5 * SECOND, virtual_clock)
+    assert result.staleness_ns == 500 * MILLIS
+    assert result.resolution_ns == CHECK_COST
 
 
-def test_a_revoke_never_seen_inside_the_cap_is_reported_as_capped(dataset):
-    engine = _engine(dataset, staleness_ns=300 * MILLIS)
-    result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, cap_ns=100 * MILLIS)
+def test_a_fresh_check_denies_on_the_first_check_after_the_acknowledgement(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=500 * MILLIS, extra_latency_ns=CHECK_COST)
+    result = race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, 5 * SECOND, virtual_clock)
+    assert result.staleness_ns == result.resolution_ns == 0
+
+
+def test_a_revoke_never_seen_inside_the_cap_is_reported_as_capped(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=300 * MILLIS, extra_latency_ns=CHECK_COST)
+    result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 100 * MILLIS, virtual_clock)
     assert result.capped
-    assert result.cap_ns == 100 * MILLIS
+    assert result.resolution_ns == CHECK_COST
 
 
-def test_the_race_restores_the_revoked_relationship(dataset):
-    engine = _engine(dataset)
-    race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, cap_ns=SECOND)
+def test_the_race_restores_the_revoked_relationship(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock)
+    race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)
     assert engine.check(dataset.revocation.probe, Consistency.FRESH)
 
 
-def test_a_probe_denied_before_the_revoke_is_refused(dataset):
-    engine = _engine(dataset)
+def test_a_probe_denied_before_the_revoke_is_refused(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock)
     engine.write(Change.remove(dataset.revocation.revoke))
     with pytest.raises(MeasurementError, match="denied before the revoke"):
-        race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, cap_ns=SECOND)
+        race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)
 
 
-def test_a_known_check_latency_is_measured(dataset):
-    engine = _engine(dataset, extra_latency_ns=2 * MILLIS)
-    summary = service_time(engine, _queries(dataset), Consistency.FRESH, duration_ns=SECOND // 2)
-    assert 2 * MILLIS <= summary.p50_ns <= 2 * MILLIS + MILLIS // 2
+def test_a_known_check_latency_is_measured(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=2 * MILLIS)
+    summary = service_time(engine, _queries(dataset), Consistency.FRESH, SECOND, virtual_clock)
+    assert _close_to(summary.p50_ns, 2 * MILLIS)
+    assert summary.count == SECOND // (2 * MILLIS)
 
 
-def test_the_open_loop_counts_a_stall_that_the_closed_loop_hides(dataset):
-    engine = _engine(dataset, stall_period_ns=200 * MILLIS, stall_duration_ns=50 * MILLIS)
+def test_the_open_loop_counts_a_stall_that_the_closed_loop_hides(dataset, virtual_clock):
+    quick_check = 10 * MICROS
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=quick_check,
+                     stall_period_ns=150 * MILLIS, stall_duration_ns=100 * MILLIS)
     queries = _queries(dataset)
-    closed = service_time(engine, queries, Consistency.FRESH, duration_ns=SECOND)
-    opened = open_loop(engine, queries, Consistency.FRESH, rate_per_second=1_000, duration_ns=SECOND)
-    assert closed.p99_ns < 5 * MILLIS
-    assert opened.latency.p99_ns >= 30 * MILLIS
+    closed = service_time(engine, queries, Consistency.FRESH, 300 * MILLIS, virtual_clock)
+    opened = open_loop(engine, queries, Consistency.FRESH, 1_000, SECOND, virtual_clock)
+    assert _close_to(closed.p50_ns, quick_check)
+    assert 20 * MILLIS <= opened.latency.p50_ns <= 30 * MILLIS
     assert opened.latency.count == 1_000
+
+
+def test_the_system_clock_never_reports_more_staleness_than_the_resolution_allows(dataset):
+    engine = _engine(dataset, SYSTEM_CLOCK, staleness_ns=500 * MILLIS)
+    result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 5 * SECOND)
+    assert result.staleness_ns <= 500 * MILLIS + result.resolution_ns
