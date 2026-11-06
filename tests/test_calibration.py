@@ -95,8 +95,9 @@ def test_the_open_loop_counts_a_stall_that_the_closed_loop_hides(dataset, virtua
 
 def test_the_system_clock_measures_a_real_staleness_within_the_stated_resolution(dataset):
     engine = _engine(dataset, SYSTEM_CLOCK, staleness_ns=500 * MILLIS)
+    started = SYSTEM_CLOCK.now()
     result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 5 * SECOND)
-    assert result.staleness_ns + result.write_ns >= 500 * MILLIS
+    assert SYSTEM_CLOCK.now() - started >= 500 * MILLIS
     assert result.staleness_ns <= 500 * MILLIS + result.resolution_ns
 
 

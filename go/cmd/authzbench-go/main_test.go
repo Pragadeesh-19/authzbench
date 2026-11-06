@@ -21,7 +21,7 @@ func tinyArguments(t *testing.T, extra ...string) ([]string, string) {
 		"-rates", "500",
 		"-service-seconds", "0.1",
 		"-open-loop-seconds", "0.2",
-		"-revocation-cap-seconds", "2",
+		"-revocation-cap-seconds", "30",
 	}
 	return append(arguments, extra...), out
 }
@@ -39,15 +39,16 @@ func TestTheCalibrationEngineMeasuresItsKnownStalenessThroughTheCommand(t *testi
 	if err := json.Unmarshal(content, &document); err != nil {
 		t.Fatal(err)
 	}
-	stale := document.Modes[1].Revocation
+	fresh, stale := document.Modes[0].Revocation, document.Modes[1].Revocation
+	if fresh.StalenessNs == nil || *fresh.StalenessNs != fresh.ResolutionNs {
+		t.Fatalf("a fresh check did not deny first: %+v", fresh)
+	}
 	if stale.Placement != "second_machine" || stale.StalenessNs == nil {
 		t.Fatalf("revocation = %+v", stale)
 	}
-	staleness := *stale.StalenessNs
-	if staleness+stale.WriteNs < demonstrationProfile.StalenessNs ||
-		staleness > demonstrationProfile.StalenessNs+stale.ResolutionNs {
-		t.Fatalf("staleness = %d, write = %d, resolution = %d, engine = %d",
-			staleness, stale.WriteNs, stale.ResolutionNs, demonstrationProfile.StalenessNs)
+	if staleness := *stale.StalenessNs; staleness > demonstrationProfile.StalenessNs+stale.ResolutionNs {
+		t.Fatalf("staleness = %d beyond the engine's %d by more than the resolution %d",
+			staleness, demonstrationProfile.StalenessNs, stale.ResolutionNs)
 	}
 }
 

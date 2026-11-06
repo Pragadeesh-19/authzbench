@@ -4,7 +4,9 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Pragadeesh-19/authzbench/go/dataset"
 	"github.com/Pragadeesh-19/authzbench/go/engine"
@@ -174,34 +176,58 @@ func TestTheOpenLoopCountsAStallThatTheClosedLoopHides(t *testing.T) {
 func TestTheSystemClockMeasuresARealStalenessWithinTheStatedResolution(t *testing.T) {
 	data, clock := tinyDataset(t), timing.NewSystemClock()
 	target := loaded(t, data, calibration.Profile{StalenessNs: 500 * millis}, clock)
+	started := clock.Now()
 	result, err := measure.RaceRevocation(context.Background(), target, target, data.Revocation, engine.Fastest, 5*second, clock)
 	if err != nil || result.StalenessNs == nil {
 		t.Fatalf("result = %+v, err = %v", result, err)
 	}
-	staleness := *result.StalenessNs
-	if staleness+result.WriteNs < 500*millis || staleness > 500*millis+result.ResolutionNs {
-		t.Fatalf("staleness = %d, write = %d, resolution = %d", staleness, result.WriteNs, result.ResolutionNs)
+	if elapsed := clock.Now() - started; elapsed < 500*millis {
+		t.Fatalf("the race saw the revoke %d ns after it began, before the engine made it visible", elapsed)
+	}
+	if staleness := *result.StalenessNs; staleness > 500*millis+result.ResolutionNs {
+		t.Fatalf("staleness = %d, resolution = %d", staleness, result.ResolutionNs)
 	}
 }
 
-func TestChecksInFlightKeepASlowEngineFromQueueingBehindTheDriver(t *testing.T) {
-	data, clock := tinyDataset(t), timing.NewSystemClock()
-	slowCheck := 5 * millis
-	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: slowCheck}, clock)
-	open := func(inFlight int) measure.OpenLoopResult {
-		result, err := measure.OpenLoop(context.Background(), target, queries(data), engine.Fresh, 1_000, 300*millis,
-			inFlight, clock)
-		if err != nil {
+type gatedChecker struct {
+	gate        chan struct{}
+	outstanding atomic.Int64
+	most        atomic.Int64
+}
+
+func (g *gatedChecker) Check(context.Context, dataset.Query, engine.Consistency, engine.Revision) (bool, error) {
+	outstanding := g.outstanding.Add(1)
+	for most := g.most.Load(); outstanding > most && !g.most.CompareAndSwap(most, outstanding); {
+		most = g.most.Load()
+	}
+	<-g.gate
+	g.outstanding.Add(-1)
+	return true, nil
+}
+
+func TestAnOpenLoopKeepsExactlyItsSlotsOutstanding(t *testing.T) {
+	data := tinyDataset(t)
+	for _, slots := range []int{1, 4} {
+		checker := &gatedChecker{gate: make(chan struct{})}
+		finished := make(chan error, 1)
+		go func() {
+			_, err := measure.OpenLoop(context.Background(), checker, queries(data), engine.Fresh, 1_000, 50*millis,
+				slots, timing.NewSystemClock())
+			finished <- err
+		}()
+		for deadline := time.Now().Add(10 * time.Second); checker.outstanding.Load() < int64(slots); {
+			if time.Now().After(deadline) {
+				t.Fatalf("%d slots: only %d checks ever outstanding", slots, checker.most.Load())
+			}
+			time.Sleep(time.Millisecond)
+		}
+		close(checker.gate)
+		if err := <-finished; err != nil {
 			t.Fatal(err)
 		}
-		return result
-	}
-	parallel, serial := open(16), open(1)
-	if parallel.InFlight != 16 || parallel.Latency.P99 > 4*slowCheck {
-		t.Errorf("16 in flight: %+v", parallel)
-	}
-	if serial.Latency.P50 < 20*slowCheck {
-		t.Errorf("1 in flight at five times its capacity: %+v", serial.Latency)
+		if most := checker.most.Load(); most != int64(slots) {
+			t.Errorf("%d slots: %d checks outstanding at once", slots, most)
+		}
 	}
 }
 
