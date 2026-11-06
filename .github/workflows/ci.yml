@@ -55,6 +55,10 @@ jobs:
       - name: Tests
         run: go test -count=1 ./...
 
+      - name: Race detector
+        if: runner.os == 'Linux'
+        run: go test -count=1 -race ./...
+
   services:
     name: services (SpiceDB and OpenFGA adapters)
     runs-on: ubuntu-latest
