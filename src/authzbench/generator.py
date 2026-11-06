@@ -21,7 +21,19 @@ _SAMPLING_ATTEMPTS_PER_CHECK = 20
 
 
 def generate(scale: Scale, seed: int) -> Dataset:
-    return _Generator(scale, seed).generate()
+    dataset = _Generator(scale, seed).generate()
+    verify_scenarios(dataset)
+    return dataset
+
+
+def verify_scenarios(dataset: Dataset) -> None:
+    """Raise unless the reference evaluator agrees with the nesting answer and the revoke flips the probe."""
+    store = RelationshipStore(dataset.relationships)
+    evaluator = ReferenceEvaluator(dataset.model, store)
+    _verify(evaluator, dataset.nesting)
+    _verify(evaluator, Expectation(dataset.revocation.probe, True))
+    store.remove(dataset.revocation.revoke)
+    _verify(evaluator, Expectation(dataset.revocation.probe, False))
 
 
 def _user(index: int) -> ObjectRef:
@@ -66,8 +78,6 @@ class _Generator:
         nesting = self._nesting_scenario()
         store = RelationshipStore(self._relationships)
         evaluator = ReferenceEvaluator(DOCUMENT_SHARING, store)
-        _verify_revocation(evaluator, store, revocation)
-        _verify(evaluator, nesting)
         expectations = _Sampler(self._random, self._scale, store, evaluator).sample()
         return Dataset(DOCUMENT_SHARING_NAME, DOCUMENT_SHARING, self._scale, self._seed, tuple(self._relationships),
                        expectations, revocation, nesting)
@@ -149,15 +159,6 @@ class _Generator:
 def _verify(evaluator: ReferenceEvaluator, expectation: Expectation) -> None:
     if evaluator.check(expectation.query) is not expectation.allowed:
         raise DatasetError(f"the reference evaluator disagrees with {expectation}")
-
-
-def _verify_revocation(evaluator: ReferenceEvaluator, store: RelationshipStore, scenario: RevocationScenario) -> None:
-    _verify(evaluator, Expectation(scenario.probe, True))
-    store.remove(scenario.revoke)
-    try:
-        _verify(evaluator, Expectation(scenario.probe, False))
-    finally:
-        store.add(scenario.revoke)
 
 
 class _Sampler:
