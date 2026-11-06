@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "authzbench"
+version = "0.1.0"
+description = "A neutral, reproducible benchmark for authorization engines"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = ["hdrhistogram>=0.10"]
+
+[project.optional-dependencies]
+nodus = ["nodusdb>=0.1.1"]
+test = ["pytest>=8", "jsonschema>=4"]
+
+[project.scripts]
+authzbench = "authzbench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+authzbench = ["results.schema.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
