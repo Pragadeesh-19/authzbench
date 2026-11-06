@@ -3,7 +3,7 @@
   "title": "AuthzBench results",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "engine", "dataset", "environment", "conformance", "modes"],
+  "required": ["format", "engine", "dataset", "environment", "conformance", "driver_baseline", "modes"],
   "properties": {
     "format": {"const": "authzbench.results/1"},
     "engine": {
@@ -43,6 +43,10 @@
         "mismatches": {"const": 0}
       }
     },
+    "driver_baseline": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/open_loop"}
+    },
     "modes": {
       "type": "array",
       "minItems": 1,
@@ -63,6 +67,16 @@
         "max_ns": {"$ref": "#/$defs/nanoseconds"}
       }
     },
+    "open_loop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate_per_second", "latency", "schedule_lag"],
+      "properties": {
+        "rate_per_second": {"type": "integer", "minimum": 1},
+        "latency": {"$ref": "#/$defs/latency"},
+        "schedule_lag": {"$ref": "#/$defs/latency"}
+      }
+    },
     "mode": {
       "type": "object",
       "additionalProperties": false,
@@ -73,16 +87,7 @@
         "service_time": {"$ref": "#/$defs/latency"},
         "open_loop": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["rate_per_second", "latency", "schedule_lag"],
-            "properties": {
-              "rate_per_second": {"type": "integer", "minimum": 1},
-              "latency": {"$ref": "#/$defs/latency"},
-              "schedule_lag": {"$ref": "#/$defs/latency"}
-            }
-          }
+          "items": {"$ref": "#/$defs/open_loop"}
         },
         "revocation": {
           "type": "object",

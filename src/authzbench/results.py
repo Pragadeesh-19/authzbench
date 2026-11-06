@@ -42,6 +42,7 @@ def to_document(result: RunResult, run_environment: dict) -> dict:
         },
         "environment": run_environment,
         "conformance": {"checks": result.conformance_checks, "mismatches": 0},
+        "driver_baseline": [_open_loop(baseline) for baseline in result.driver_baseline],
         "modes": [_mode(mode) for mode in result.modes],
     }
 

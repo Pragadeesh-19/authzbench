@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from authzbench.dataset import Dataset
 from authzbench.engine import Checker, Consistency, Engine
+from authzbench.engines.noop import NoopChecker
 from authzbench.measure import OpenLoopResult, RevocationResult, open_loop, race_revocation, service_time
 from authzbench.relationships import Expectation
 from authzbench.timing import NANOS_PER_SECOND, LatencySummary
@@ -42,6 +43,7 @@ class RunResult:
     engine_version: str
     dataset: Dataset
     conformance_checks: int
+    driver_baseline: tuple[OpenLoopResult, ...]
     modes: tuple[ModeResult, ...]
 
 
@@ -58,6 +60,8 @@ def run(engine: Engine, dataset: Dataset, plan: RunPlan) -> RunResult:
     engine.load(dataset)
     conformance_checks = verify_conformance(engine, dataset)
     queries = [expectation.query for expectation in dataset.expectations]
+    driver_baseline = tuple(open_loop(NoopChecker(), queries, Consistency.FRESH, rate, plan.open_loop_ns)
+                            for rate in plan.open_loop_rates)
     modes = tuple(
         ModeResult(
             consistency=consistency,
@@ -69,4 +73,4 @@ def run(engine: Engine, dataset: Dataset, plan: RunPlan) -> RunResult:
         )
         for consistency, mode in engine.modes().items()
     )
-    return RunResult(engine.name, engine.version, dataset, conformance_checks, modes)
+    return RunResult(engine.name, engine.version, dataset, conformance_checks, driver_baseline, modes)

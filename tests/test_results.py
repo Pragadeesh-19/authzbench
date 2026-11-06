@@ -30,6 +30,8 @@ def test_a_run_produces_a_document_that_follows_the_schema(dataset):
     jsonschema.validate(document, results_schema())
     assert [mode["consistency"] for mode in document["modes"]] == ["fresh", "fastest"]
     assert document["conformance"]["checks"] == SCALES["S"].checks + 1
+    assert [baseline["rate_per_second"] for baseline in document["driver_baseline"]] == list(
+        SHORT_PLAN.open_loop_rates)
 
 
 def test_a_capped_revocation_is_written_as_null_staleness(dataset):
