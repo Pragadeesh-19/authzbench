@@ -7,12 +7,15 @@ import (
 	"github.com/Pragadeesh-19/authzbench/go/internal/enginetest"
 )
 
-const version = "test"
+const (
+	version     = "test"
+	connections = 16
+)
 
 func dial(t *testing.T) *openfga.Engine {
 	t.Helper()
 	apiURL := enginetest.Endpoint(t, "AUTHZBENCH_OPENFGA_URL")
-	target, err := openfga.Dial(apiURL, enginetest.Schema(t, "model.fga"), version)
+	target, err := openfga.Dial(apiURL, enginetest.Schema(t, "model.fga"), version, connections)
 	if err != nil {
 		t.Fatal(err)
 	}

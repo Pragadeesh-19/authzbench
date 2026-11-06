@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	fga "github.com/openfga/go-sdk"
 	"github.com/openfga/go-sdk/client"
@@ -26,12 +27,12 @@ type Engine struct {
 	version string
 }
 
-func Dial(apiURL, modelDSL, version string) (*Engine, error) {
+func Dial(apiURL, modelDSL, version string, connections int) (*Engine, error) {
 	model, err := parseModel(modelDSL)
 	if err != nil {
 		return nil, err
 	}
-	sdk, err := client.NewSdkClient(&client.ClientConfiguration{ApiUrl: apiURL})
+	sdk, err := client.NewSdkClient(&client.ClientConfiguration{ApiUrl: apiURL, HTTPClient: pooledClient(connections)})
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +110,13 @@ func (e *Engine) Check(ctx context.Context, query dataset.Query, consistency eng
 
 func (e *Engine) Close() error {
 	return nil
+}
+
+func pooledClient(connections int) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = connections
+	transport.MaxIdleConnsPerHost = connections
+	return &http.Client{Transport: transport}
 }
 
 func parseModel(modelDSL string) (fga.WriteAuthorizationModelRequest, error) {

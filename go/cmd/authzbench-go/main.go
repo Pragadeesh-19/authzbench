@@ -46,7 +46,7 @@ var (
 			if err != nil {
 				return nil, err
 			}
-			return openfga.Dial(chosen.openfgaURL, string(model), chosen.openfgaVersion)
+			return openfga.Dial(chosen.openfgaURL, string(model), chosen.openfgaVersion, chosen.inFlight)
 		},
 	}
 )
