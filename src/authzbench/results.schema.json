@@ -94,7 +94,7 @@
           "additionalProperties": false,
           "required": ["placement", "staleness_ns", "resolution_ns", "write_ns", "cap_ns"],
           "properties": {
-            "placement": {"enum": ["in_process", "second_machine"]},
+            "placement": {"enum": ["in_process", "same_machine", "second_machine"]},
             "staleness_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
             "resolution_ns": {"$ref": "#/$defs/nanoseconds"},
             "write_ns": {"$ref": "#/$defs/nanoseconds"},
