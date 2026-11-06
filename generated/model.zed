@@ -1,0 +1,17 @@
+definition user {}
+
+definition group {
+	relation member: user | group#member
+}
+
+definition folder {
+	relation parent: folder
+	relation viewer: user | group#member
+	permission view = viewer + parent->view
+}
+
+definition document {
+	relation parent: folder
+	relation viewer: user | group#member
+	permission view = viewer + parent->view
+}
