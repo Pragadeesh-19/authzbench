@@ -65,6 +65,7 @@ def _mode(mode: ModeResult) -> dict:
 def _open_loop(result: OpenLoopResult) -> dict:
     return {
         "rate_per_second": result.rate_per_second,
+        "in_flight": result.in_flight,
         "latency": asdict(result.latency),
         "schedule_lag": asdict(result.schedule_lag),
     }

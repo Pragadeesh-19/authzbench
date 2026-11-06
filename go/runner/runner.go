@@ -17,6 +17,7 @@ type Plan struct {
 	OpenLoopRates   []int64
 	OpenLoopNs      int64
 	RevocationCapNs int64
+	InFlight        int
 	Placement       string
 }
 
@@ -120,7 +121,7 @@ func openLoops(ctx context.Context, checker engine.Checker, queries []dataset.Qu
 	plan Plan, clock timing.Clock) ([]measure.OpenLoopResult, error) {
 	results := make([]measure.OpenLoopResult, 0, len(plan.OpenLoopRates))
 	for _, rate := range plan.OpenLoopRates {
-		result, err := measure.OpenLoop(ctx, checker, queries, consistency, rate, plan.OpenLoopNs, clock)
+		result, err := measure.OpenLoop(ctx, checker, queries, consistency, rate, plan.OpenLoopNs, plan.InFlight, clock)
 		if err != nil {
 			return nil, err
 		}

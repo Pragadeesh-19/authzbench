@@ -159,7 +159,7 @@ func TestTheOpenLoopCountsAStallThatTheClosedLoopHides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := measure.OpenLoop(context.Background(), target, queries(data), engine.Fresh, 1_000, second, clock)
+	opened, err := measure.OpenLoop(context.Background(), target, queries(data), engine.Fresh, 1_000, second, 1, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,5 +181,34 @@ func TestTheSystemClockMeasuresARealStalenessWithinTheStatedResolution(t *testin
 	staleness := *result.StalenessNs
 	if staleness+result.WriteNs < 500*millis || staleness > 500*millis+result.ResolutionNs {
 		t.Fatalf("staleness = %d, write = %d, resolution = %d", staleness, result.WriteNs, result.ResolutionNs)
+	}
+}
+
+func TestChecksInFlightKeepASlowEngineFromQueueingBehindTheDriver(t *testing.T) {
+	data, clock := tinyDataset(t), timing.NewSystemClock()
+	slowCheck := 5 * millis
+	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: slowCheck}, clock)
+	open := func(inFlight int) measure.OpenLoopResult {
+		result, err := measure.OpenLoop(context.Background(), target, queries(data), engine.Fresh, 1_000, 300*millis,
+			inFlight, clock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	parallel, serial := open(16), open(1)
+	if parallel.InFlight != 16 || parallel.Latency.P99 > 4*slowCheck {
+		t.Errorf("16 in flight: %+v", parallel)
+	}
+	if serial.Latency.P50 < 20*slowCheck {
+		t.Errorf("1 in flight at five times its capacity: %+v", serial.Latency)
+	}
+}
+
+func TestAnOpenLoopWithNoCheckInFlightIsRefused(t *testing.T) {
+	data, clock := tinyDataset(t), &virtualclock.Clock{}
+	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: checkCost}, clock)
+	if _, err := measure.OpenLoop(context.Background(), target, queries(data), engine.Fresh, 1_000, second, 0, clock); err == nil {
+		t.Fatal("an open loop ran with no check in flight")
 	}
 }

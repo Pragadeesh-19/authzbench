@@ -9,6 +9,8 @@ from authzbench.engine import Checker, Consistency, Writer
 from authzbench.relationships import Change, CheckQuery
 from authzbench.timing import NANOS_PER_SECOND, SYSTEM_CLOCK, Clock, LatencyHistogram, LatencySummary
 
+CHECKS_IN_FLIGHT = 1
+
 
 class MeasurementError(RuntimeError):
     pass
@@ -17,6 +19,7 @@ class MeasurementError(RuntimeError):
 @dataclass(frozen=True)
 class OpenLoopResult:
     rate_per_second: int
+    in_flight: int
     latency: LatencySummary
     schedule_lag: LatencySummary
 
@@ -49,7 +52,9 @@ def service_time(checker: Checker, queries: Sequence[CheckQuery], consistency: C
 
 def open_loop(checker: Checker, queries: Sequence[CheckQuery], consistency: Consistency, rate_per_second: int,
               duration_ns: int, clock: Clock = SYSTEM_CLOCK) -> OpenLoopResult:
-    """Checks issued on a fixed schedule, each timed from when it was due, so a stall is counted, not skipped."""
+    """Checks issued on a fixed schedule, each timed from when it was due, so a stall is counted, not skipped.
+
+    Each check runs on the calling thread, as an application calls an embedded engine, so one is in flight."""
     latency = LatencyHistogram()
     lag = LatencyHistogram()
     interval_ns = NANOS_PER_SECOND / rate_per_second
@@ -62,7 +67,7 @@ def open_loop(checker: Checker, queries: Sequence[CheckQuery], consistency: Cons
         checker.check(query, consistency)
         latency.record(clock.now() - due)
         lag.record(started - due)
-    return OpenLoopResult(rate_per_second, latency.summary(), lag.summary())
+    return OpenLoopResult(rate_per_second, CHECKS_IN_FLIGHT, latency.summary(), lag.summary())
 
 
 def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenario, consistency: Consistency,

@@ -11,6 +11,7 @@ import (
 
 type OpenLoopResult struct {
 	RatePerSecond int64          `json:"rate_per_second"`
+	InFlight      int            `json:"in_flight"`
 	Latency       timing.Summary `json:"latency"`
 	ScheduleLag   timing.Summary `json:"schedule_lag"`
 }
@@ -43,25 +44,55 @@ func ServiceTime(ctx context.Context, checker engine.Checker, queries []dataset.
 }
 
 func OpenLoop(ctx context.Context, checker engine.Checker, queries []dataset.Query, consistency engine.Consistency,
-	ratePerSecond, duration int64, clock timing.Clock) (OpenLoopResult, error) {
-	latency, lag := timing.NewHistogram(), timing.NewHistogram()
+	ratePerSecond, duration int64, inFlight int, clock timing.Clock) (OpenLoopResult, error) {
+	if inFlight < 1 {
+		return OpenLoopResult{}, fmt.Errorf("an open loop needs at least one check in flight, not %d", inFlight)
+	}
 	count := duration * ratePerSecond / timing.NanosPerSecond
+	slots := make(chan struct{}, inFlight)
+	samples := make(chan scheduledCheck, count)
 	firstDue := clock.Now()
 	for index := int64(0); index < count; index++ {
+		slots <- struct{}{}
 		due := firstDue + index*timing.NanosPerSecond/ratePerSecond
 		clock.WaitUntil(due)
-		started := clock.Now()
-		if _, err := checker.Check(ctx, queries[index%int64(len(queries))], consistency, nil); err != nil {
+		query := queries[index%int64(len(queries))]
+		go func() {
+			started := clock.Now()
+			_, err := checker.Check(ctx, query, consistency, nil)
+			samples <- scheduledCheck{due: due, started: started, finished: clock.Now(), err: err}
+			<-slots
+		}()
+	}
+	for range inFlight {
+		slots <- struct{}{}
+	}
+	close(samples)
+	return summarizeOpenLoop(samples, ratePerSecond, inFlight)
+}
+
+type scheduledCheck struct {
+	due      int64
+	started  int64
+	finished int64
+	err      error
+}
+
+func summarizeOpenLoop(samples <-chan scheduledCheck, ratePerSecond int64, inFlight int) (OpenLoopResult, error) {
+	latency, lag := timing.NewHistogram(), timing.NewHistogram()
+	for sample := range samples {
+		if sample.err != nil {
+			return OpenLoopResult{}, sample.err
+		}
+		if err := latency.Record(sample.finished - sample.due); err != nil {
 			return OpenLoopResult{}, err
 		}
-		if err := latency.Record(clock.Now() - due); err != nil {
-			return OpenLoopResult{}, err
-		}
-		if err := lag.Record(started - due); err != nil {
+		if err := lag.Record(sample.started - sample.due); err != nil {
 			return OpenLoopResult{}, err
 		}
 	}
-	return OpenLoopResult{RatePerSecond: ratePerSecond, Latency: latency.Summary(), ScheduleLag: lag.Summary()}, nil
+	return OpenLoopResult{RatePerSecond: ratePerSecond, InFlight: inFlight, Latency: latency.Summary(),
+		ScheduleLag: lag.Summary()}, nil
 }
 
 func RaceRevocation(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Revocation,

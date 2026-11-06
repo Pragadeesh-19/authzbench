@@ -32,6 +32,7 @@ def test_a_run_produces_a_document_that_follows_the_schema(dataset):
     assert document["conformance"]["checks"] == SCALES["S"].checks + 1
     assert [baseline["rate_per_second"] for baseline in document["driver_baseline"]] == list(
         SHORT_PLAN.open_loop_rates)
+    assert {opened["in_flight"] for mode in document["modes"] for opened in mode["open_loop"]} == {1}
 
 
 def test_a_capped_revocation_is_written_as_null_staleness(dataset):

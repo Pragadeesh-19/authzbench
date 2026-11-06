@@ -70,9 +70,10 @@
     "open_loop": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rate_per_second", "latency", "schedule_lag"],
+      "required": ["rate_per_second", "in_flight", "latency", "schedule_lag"],
       "properties": {
         "rate_per_second": {"type": "integer", "minimum": 1},
+        "in_flight": {"type": "integer", "minimum": 1},
         "latency": {"$ref": "#/$defs/latency"},
         "schedule_lag": {"$ref": "#/$defs/latency"}
       }

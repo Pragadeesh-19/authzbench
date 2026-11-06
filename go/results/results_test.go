@@ -24,7 +24,7 @@ var schemaPath = filepath.Join("..", "..", "src", "authzbench", "results.schema.
 
 func shortPlan() runner.Plan {
 	return runner.Plan{ServiceTimeNs: 100 * millis, OpenLoopRates: []int64{500}, OpenLoopNs: 200 * millis,
-		RevocationCapNs: 100 * millis, Placement: "same_machine"}
+		RevocationCapNs: 100 * millis, InFlight: 1, Placement: "same_machine"}
 }
 
 func run(t *testing.T, profile calibration.Profile) results.Document {
