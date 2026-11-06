@@ -3,6 +3,7 @@ package calibration
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/Pragadeesh-19/authzbench/go/dataset"
 	"github.com/Pragadeesh-19/authzbench/go/engine"
@@ -23,13 +24,15 @@ type pendingChange struct {
 
 // Engine answers from a dataset's expected answers; the revocation probe is allowed exactly while the revoke
 // relationship is visible. Writes reach fastest-mode checks after Profile.StalenessNs, every check takes at least
-// Profile.ExtraLatencyNs, and the engine stops answering for StallDurationNs once every StallPeriodNs.
+// Profile.ExtraLatencyNs, and the engine stops answering for StallDurationNs once every StallPeriodNs. Checks may run
+// concurrently; each spends its latency outside the lock.
 type Engine struct {
 	profile  Profile
 	clock    timing.Clock
 	started  int64
 	answers  map[dataset.Query]bool
 	scenario dataset.Revocation
+	state    sync.Mutex
 	revoked  bool
 	pending  []pendingChange
 	revision int64
@@ -60,6 +63,8 @@ func (e *Engine) Write(_ context.Context, change engine.Change) (engine.Revision
 	if change.Relationship != e.scenario.Revoke {
 		return nil, fmt.Errorf("the calibration engine only writes %s", e.scenario.Revoke)
 	}
+	e.state.Lock()
+	defer e.state.Unlock()
 	e.pending = append(e.pending, pendingChange{visibleAt: e.clock.Now() + e.profile.StalenessNs, change: change})
 	e.revision++
 	return e.revision, nil
@@ -68,23 +73,27 @@ func (e *Engine) Write(_ context.Context, change engine.Change) (engine.Revision
 func (e *Engine) Check(_ context.Context, query dataset.Query, consistency engine.Consistency, _ engine.Revision) (bool, error) {
 	started := e.clock.Now()
 	e.waitOutStall(started)
+	allowed, err := e.answer(query, consistency)
+	e.clock.WaitUntil(started + e.profile.ExtraLatencyNs)
+	return allowed, err
+}
+
+func (e *Engine) Close() error {
+	e.state.Lock()
+	defer e.state.Unlock()
+	e.pending = nil
+	return nil
+}
+
+func (e *Engine) answer(query dataset.Query, consistency engine.Consistency) (bool, error) {
+	e.state.Lock()
+	defer e.state.Unlock()
 	if consistency == engine.Fresh {
 		e.applyPending(func(pendingChange) bool { return true })
 	} else {
 		now := e.clock.Now()
 		e.applyPending(func(next pendingChange) bool { return next.visibleAt <= now })
 	}
-	allowed, err := e.answer(query)
-	e.clock.WaitUntil(started + e.profile.ExtraLatencyNs)
-	return allowed, err
-}
-
-func (e *Engine) Close() error {
-	e.pending = nil
-	return nil
-}
-
-func (e *Engine) answer(query dataset.Query) (bool, error) {
 	if query == e.scenario.Probe {
 		return !e.revoked, nil
 	}
