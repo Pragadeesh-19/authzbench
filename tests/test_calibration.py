@@ -39,12 +39,14 @@ def test_a_known_staleness_is_measured_exactly(dataset, virtual_clock):
     result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 5 * SECOND, virtual_clock)
     assert result.staleness_ns == 500 * MILLIS
     assert result.resolution_ns == CHECK_COST
+    assert result.denied_by_ns == 500 * MILLIS + CHECK_COST
 
 
 def test_a_fresh_check_denies_on_the_first_check_after_the_acknowledgement(dataset, virtual_clock):
     engine = _engine(dataset, virtual_clock, staleness_ns=500 * MILLIS, extra_latency_ns=CHECK_COST)
     result = race_revocation(engine, engine, dataset.revocation, Consistency.FRESH, 5 * SECOND, virtual_clock)
     assert result.staleness_ns == result.resolution_ns == 0
+    assert result.denied_by_ns == CHECK_COST
 
 
 def test_a_revoke_never_seen_inside_the_cap_is_reported_as_capped(dataset, virtual_clock):
@@ -52,6 +54,20 @@ def test_a_revoke_never_seen_inside_the_cap_is_reported_as_capped(dataset, virtu
     result = race_revocation(engine, engine, dataset.revocation, Consistency.FASTEST, 100 * MILLIS, virtual_clock)
     assert result.capped
     assert result.resolution_ns == CHECK_COST
+    assert result.denied_by_ns is None
+
+
+def test_a_check_that_waits_inside_the_call_for_the_revoke_is_charged_in_denied_by(dataset, virtual_clock):
+    class WaitsForTheToken:
+        def check(self, query, consistency, after=None):
+            if after is not None:
+                virtual_clock.wait_until(virtual_clock.now() + 300 * MILLIS)
+            return engine.check(query, Consistency.FRESH)
+
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=CHECK_COST)
+    result = race_revocation(engine, WaitsForTheToken(), dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)
+    assert result.staleness_ns == 0
+    assert result.denied_by_ns == 300 * MILLIS + CHECK_COST
 
 
 def test_the_race_restores_the_revoked_relationship(dataset, virtual_clock):

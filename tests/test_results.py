@@ -40,6 +40,9 @@ def test_a_capped_revocation_is_written_as_null_staleness(dataset):
     jsonschema.validate(document, results_schema())
     stale = next(mode for mode in document["modes"] if mode["consistency"] == "fastest")
     assert stale["revocation"]["staleness_ns"] is None
+    assert stale["revocation"]["denied_by_ns"] is None
+    fresh = next(mode for mode in document["modes"] if mode["consistency"] == "fresh")
+    assert fresh["revocation"]["denied_by_ns"] >= fresh["revocation"]["staleness_ns"]
     assert stale["revocation"]["cap_ns"] == 100 * MILLIS
 
 

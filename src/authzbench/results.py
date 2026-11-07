@@ -76,6 +76,7 @@ def _revocation(result: RevocationResult, placement: str) -> dict:
         "placement": placement,
         "staleness_ns": result.staleness_ns,
         "resolution_ns": result.resolution_ns,
+        "denied_by_ns": result.denied_by_ns,
         "write_ns": result.write_ns,
         "cap_ns": result.cap_ns,
     }

@@ -19,6 +19,7 @@ type OpenLoopResult struct {
 type RevocationResult struct {
 	StalenessNs  *int64
 	ResolutionNs int64
+	DeniedByNs   *int64
 	WriteNs      int64
 	CapNs        int64
 }
@@ -145,8 +146,8 @@ func awaitDenial(ctx context.Context, checker engine.Checker, probe dataset.Quer
 			return result, err
 		}
 		if !allowed {
-			staleness := started - acknowledged
-			result.StalenessNs = &staleness
+			staleness, deniedBy := started-acknowledged, clock.Now()-acknowledged
+			result.StalenessNs, result.DeniedByNs = &staleness, &deniedBy
 			return result, nil
 		}
 		previousStart = started

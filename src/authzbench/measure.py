@@ -30,6 +30,7 @@ class RevocationResult:
     resolution_ns: int
     write_ns: int
     cap_ns: int
+    denied_by_ns: int | None
 
     @property
     def capped(self) -> bool:
@@ -76,7 +77,8 @@ def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenar
 
     The race starts once the probe is allowed at the given consistency, waiting at most the cap for an earlier
     race's restore to become visible. The resolution is the gap between the denying check's start and the one
-    before it; the write time runs from issuing the revoke to its acknowledgement."""
+    before it; denied-by runs from the acknowledgement until that check returned, so a check that waits inside the
+    call for the revoke is charged its wait; the write time runs from issuing the revoke to its acknowledgement."""
     _await_grant(checker, scenario.probe, consistency, cap_ns, clock)
     issued = clock.now()
     revision = writer.write(Change.remove(scenario.revoke))
@@ -86,9 +88,10 @@ def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenar
         while True:
             started = clock.now()
             if started - acknowledged > cap_ns:
-                return RevocationResult(None, started - previous_start, write_ns, cap_ns)
+                return RevocationResult(None, started - previous_start, write_ns, cap_ns, None)
             if not checker.check(scenario.probe, consistency, revision):
-                return RevocationResult(started - acknowledged, started - previous_start, write_ns, cap_ns)
+                return RevocationResult(started - acknowledged, started - previous_start, write_ns, cap_ns,
+                                        clock.now() - acknowledged)
             previous_start = started
     finally:
         writer.write(Change.add(scenario.revoke))

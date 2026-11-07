@@ -62,6 +62,7 @@ type Revocation struct {
 	Placement    string `json:"placement"`
 	StalenessNs  *int64 `json:"staleness_ns"`
 	ResolutionNs int64  `json:"resolution_ns"`
+	DeniedByNs   *int64 `json:"denied_by_ns"`
 	WriteNs      int64  `json:"write_ns"`
 	CapNs        int64  `json:"cap_ns"`
 }
@@ -94,6 +95,7 @@ func FromRun(result runner.RunResult, environment Environment) Document {
 				Placement:    mode.Placement,
 				StalenessNs:  mode.Revocation.StalenessNs,
 				ResolutionNs: mode.Revocation.ResolutionNs,
+				DeniedByNs:   mode.Revocation.DeniedByNs,
 				WriteNs:      mode.Revocation.WriteNs,
 				CapNs:        mode.Revocation.CapNs,
 			},

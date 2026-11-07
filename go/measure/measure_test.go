@@ -71,6 +71,9 @@ func TestAKnownStalenessIsMeasuredExactly(t *testing.T) {
 	if result.StalenessNs == nil || *result.StalenessNs != 500*millis || result.ResolutionNs != checkCost {
 		t.Fatalf("result = %+v", result)
 	}
+	if result.DeniedByNs == nil || *result.DeniedByNs != 500*millis+checkCost {
+		t.Fatalf("denied by = %v", result.DeniedByNs)
+	}
 }
 
 func TestAFreshCheckDeniesOnTheFirstCheckAfterTheAcknowledgement(t *testing.T) {
@@ -78,11 +81,40 @@ func TestAFreshCheckDeniesOnTheFirstCheckAfterTheAcknowledgement(t *testing.T) {
 	if result.StalenessNs == nil || *result.StalenessNs != 0 || result.ResolutionNs != 0 {
 		t.Fatalf("result = %+v", result)
 	}
+	if result.DeniedByNs == nil || *result.DeniedByNs != checkCost {
+		t.Fatalf("denied by = %v", result.DeniedByNs)
+	}
+}
+
+type waitsForTheToken struct {
+	inner *calibration.Engine
+	clock *virtualclock.Clock
+	wait  int64
+}
+
+func (w waitsForTheToken) Check(ctx context.Context, query dataset.Query, _ engine.Consistency, after engine.Revision) (bool, error) {
+	if after != nil {
+		w.clock.WaitUntil(w.clock.Now() + w.wait)
+	}
+	return w.inner.Check(ctx, query, engine.Fresh, nil)
+}
+
+func TestACheckThatWaitsInsideTheCallForTheRevokeIsChargedInDeniedBy(t *testing.T) {
+	data, clock := tinyDataset(t), &virtualclock.Clock{}
+	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: checkCost}, clock)
+	checker := waitsForTheToken{inner: target, clock: clock, wait: 300 * millis}
+	result, err := measure.RaceRevocation(context.Background(), target, checker, data.Revocation, engine.Fresh, second, clock)
+	if err != nil || result.StalenessNs == nil || *result.StalenessNs != 0 {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if result.DeniedByNs == nil || *result.DeniedByNs != 300*millis+checkCost {
+		t.Fatalf("denied by = %v", result.DeniedByNs)
+	}
 }
 
 func TestARevokeNeverSeenInsideTheCapIsReportedAsCapped(t *testing.T) {
 	result := race(t, calibration.Profile{StalenessNs: 150 * millis, ExtraLatencyNs: checkCost}, engine.Fastest, 100*millis)
-	if !result.Capped() || result.ResolutionNs != checkCost {
+	if !result.Capped() || result.ResolutionNs != checkCost || result.DeniedByNs != nil {
 		t.Fatalf("result = %+v", result)
 	}
 }
