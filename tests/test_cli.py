@@ -10,7 +10,7 @@ from authzbench.generator import generate
 MILLIS = 1_000_000
 LOOPBACK = "127.0.0.1"
 SHORT_RUN = ["--rates", "100", "--service-seconds", "0.1", "--open-loop-seconds", "0.2",
-             "--revocation-cap-seconds", "10"]
+             "--revocation-cap-seconds", "10", "--revocation-trials", "3"]
 
 
 @pytest.fixture(scope="module")
@@ -56,8 +56,10 @@ def test_the_calibration_engine_served_on_another_machine_measures_its_known_sta
     document = json.loads(out.read_text(encoding="utf-8"))
     stale = next(mode["revocation"] for mode in document["modes"] if mode["consistency"] == "fastest")
     assert {mode["revocation"]["placement"] for mode in document["modes"]} == {"same_machine"}
-    assert stale["staleness_ns"] <= 500 * MILLIS + stale["resolution_ns"]
-    assert stale["denied_by_ns"] >= stale["staleness_ns"]
+    assert (stale["trials"], stale["capped"]) == (3, 0)
+    for trial in stale["samples"]:
+        assert trial["staleness_ns"] <= 500 * MILLIS + trial["resolution_ns"]
+        assert trial["denied_by_ns"] >= trial["staleness_ns"]
 
 
 def test_a_nodus_writer_and_its_follower_run_as_a_pair(dataset_directory, tmp_path, capsys):
@@ -78,4 +80,4 @@ def test_a_nodus_writer_and_its_follower_run_as_a_pair(dataset_directory, tmp_pa
     assert document["engine"]["name"] == "nodus-follower"
     assert [mode["consistency"] for mode in document["modes"]] == ["fresh", "fastest"]
     fresh = document["modes"][0]["revocation"]
-    assert fresh["staleness_ns"] == fresh["resolution_ns"]
+    assert all(trial["staleness_ns"] == trial["resolution_ns"] for trial in fresh["samples"])

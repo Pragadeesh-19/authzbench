@@ -9,7 +9,7 @@ from authzbench.runner import RunPlan, run
 
 MILLIS = 1_000_000
 SHORT_PLAN = RunPlan(service_time_ns=100 * MILLIS, open_loop_rates=(500,), open_loop_ns=200 * MILLIS,
-                     revocation_cap_ns=100 * MILLIS)
+                     revocation_cap_ns=100 * MILLIS, revocation_trials=3)
 
 
 @pytest.fixture(scope="module")
@@ -41,8 +41,12 @@ def test_a_capped_revocation_is_written_as_null_staleness(dataset):
     stale = next(mode for mode in document["modes"] if mode["consistency"] == "fastest")
     assert stale["revocation"]["staleness_ns"] is None
     assert stale["revocation"]["denied_by_ns"] is None
+    assert (stale["revocation"]["trials_requested"], stale["revocation"]["trials"], stale["revocation"]["capped"]) == (
+        3, 1, 1)
     fresh = next(mode for mode in document["modes"] if mode["consistency"] == "fresh")
-    assert fresh["revocation"]["denied_by_ns"] >= fresh["revocation"]["staleness_ns"]
+    assert (fresh["revocation"]["trials"], fresh["revocation"]["capped"], len(fresh["revocation"]["samples"])) == (
+        3, 0, 3)
+    assert fresh["revocation"]["denied_by_ns"]["p50_ns"] >= fresh["revocation"]["staleness_ns"]["p50_ns"]
     assert stale["revocation"]["cap_ns"] == 100 * MILLIS
 
 

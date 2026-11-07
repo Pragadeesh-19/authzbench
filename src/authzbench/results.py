@@ -8,10 +8,10 @@ from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
 
-from authzbench.measure import OpenLoopResult, RevocationResult
+from authzbench.measure import OpenLoopResult, RevocationResult, TrialSpread
 from authzbench.runner import ModeResult, RunResult
 
-FORMAT = "authzbench.results/1"
+FORMAT = "authzbench.results/2"
 
 
 def results_schema() -> dict:
@@ -58,7 +58,7 @@ def _mode(mode: ModeResult) -> dict:
         "mode": mode.mode,
         "service_time": asdict(mode.service_time),
         "open_loop": [_open_loop(result) for result in mode.open_loop],
-        "revocation": _revocation(mode.revocation, mode.placement),
+        "revocation": _revocation(mode.revocations, mode.revocation_trials, mode.placement),
     }
 
 
@@ -71,12 +71,23 @@ def _open_loop(result: OpenLoopResult) -> dict:
     }
 
 
-def _revocation(result: RevocationResult, placement: str) -> dict:
+def _revocation(trials: tuple[RevocationResult, ...], requested: int, placement: str) -> dict:
+    seen = [trial for trial in trials if not trial.capped]
     return {
         "placement": placement,
-        "staleness_ns": result.staleness_ns,
-        "resolution_ns": result.resolution_ns,
-        "denied_by_ns": result.denied_by_ns,
-        "write_ns": result.write_ns,
-        "cap_ns": result.cap_ns,
+        "cap_ns": trials[0].cap_ns,
+        "trials_requested": requested,
+        "trials": len(trials),
+        "capped": len(trials) - len(seen),
+        "staleness_ns": _spread([trial.staleness_ns for trial in seen]),
+        "denied_by_ns": _spread([trial.denied_by_ns for trial in seen]),
+        "resolution_ns": _spread([trial.resolution_ns for trial in trials]),
+        "write_ns": _spread([trial.write_ns for trial in trials]),
+        "samples": [{"staleness_ns": trial.staleness_ns, "resolution_ns": trial.resolution_ns,
+                     "denied_by_ns": trial.denied_by_ns, "write_ns": trial.write_ns} for trial in trials],
     }
+
+
+def _spread(values: list[int]) -> dict | None:
+    spread = TrialSpread.of(values)
+    return None if spread is None else asdict(spread)

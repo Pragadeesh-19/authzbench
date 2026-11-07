@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import math
 from dataclasses import dataclass
 from itertools import cycle
 
@@ -35,6 +36,25 @@ class RevocationResult:
     @property
     def capped(self) -> bool:
         return self.staleness_ns is None
+
+
+@dataclass(frozen=True)
+class TrialSpread:
+    count: int
+    p50_ns: int
+    p99_ns: int
+    max_ns: int
+
+    @classmethod
+    def of(cls, values: Sequence[int]) -> TrialSpread | None:
+        if not values:
+            return None
+        ordered = sorted(values)
+        return cls(len(ordered), _nearest_rank(ordered, 0.50), _nearest_rank(ordered, 0.99), ordered[-1])
+
+
+def _nearest_rank(ordered: Sequence[int], quantile: float) -> int:
+    return ordered[max(0, math.ceil(quantile * len(ordered)) - 1)]
 
 
 def service_time(checker: Checker, queries: Sequence[CheckQuery], consistency: Consistency, duration_ns: int,
@@ -95,6 +115,22 @@ def race_revocation(writer: Writer, checker: Checker, scenario: RevocationScenar
             previous_start = started
     finally:
         writer.write(Change.add(scenario.revoke))
+
+
+def race_revocations(writer: Writer, checker: Checker, scenario: RevocationScenario, consistency: Consistency,
+                     cap_ns: int, trials: int, clock: Clock = SYSTEM_CLOCK) -> tuple[RevocationResult, ...]:
+    """The revocation race run up to trials times in a row, each waiting for the previous restore to be visible.
+
+    A capped trial ends the run: its revoke was not seen within the cap, so no further trial can say more than
+    "> cap", and its restore may take as long to appear."""
+    if trials < 1:
+        raise MeasurementError(f"a revocation needs at least one trial, not {trials}")
+    results: list[RevocationResult] = []
+    for _ in range(trials):
+        results.append(race_revocation(writer, checker, scenario, consistency, cap_ns, clock))
+        if results[-1].capped:
+            break
+    return tuple(results)
 
 
 def _await_grant(checker: Checker, probe: CheckQuery, consistency: Consistency, cap_ns: int, clock: Clock) -> None:

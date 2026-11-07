@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["format", "engine", "dataset", "environment", "conformance", "driver_baseline", "modes"],
   "properties": {
-    "format": {"const": "authzbench.results/1"},
+    "format": {"const": "authzbench.results/2"},
     "engine": {
       "type": "object",
       "additionalProperties": false,
@@ -55,6 +55,28 @@
   },
   "$defs": {
     "nanoseconds": {"type": "integer", "minimum": 0},
+    "spread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "p50_ns", "p99_ns", "max_ns"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 1},
+        "p50_ns": {"$ref": "#/$defs/nanoseconds"},
+        "p99_ns": {"$ref": "#/$defs/nanoseconds"},
+        "max_ns": {"$ref": "#/$defs/nanoseconds"}
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["staleness_ns", "resolution_ns", "denied_by_ns", "write_ns"],
+      "properties": {
+        "staleness_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
+        "resolution_ns": {"$ref": "#/$defs/nanoseconds"},
+        "denied_by_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
+        "write_ns": {"$ref": "#/$defs/nanoseconds"}
+      }
+    },
     "latency": {
       "type": "object",
       "additionalProperties": false,
@@ -93,14 +115,19 @@
         "revocation": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["placement", "staleness_ns", "resolution_ns", "denied_by_ns", "write_ns", "cap_ns"],
+          "required": ["placement", "cap_ns", "trials_requested", "trials", "capped", "staleness_ns", "denied_by_ns",
+                       "resolution_ns", "write_ns", "samples"],
           "properties": {
             "placement": {"enum": ["in_process", "same_machine", "second_machine"]},
-            "staleness_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
-            "resolution_ns": {"$ref": "#/$defs/nanoseconds"},
-            "denied_by_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
-            "write_ns": {"$ref": "#/$defs/nanoseconds"},
-            "cap_ns": {"type": "integer", "minimum": 1}
+            "cap_ns": {"type": "integer", "minimum": 1},
+            "trials_requested": {"type": "integer", "minimum": 1},
+            "trials": {"type": "integer", "minimum": 1},
+            "capped": {"type": "integer", "minimum": 0},
+            "staleness_ns": {"oneOf": [{"$ref": "#/$defs/spread"}, {"type": "null"}]},
+            "denied_by_ns": {"oneOf": [{"$ref": "#/$defs/spread"}, {"type": "null"}]},
+            "resolution_ns": {"$ref": "#/$defs/spread"},
+            "write_ns": {"$ref": "#/$defs/spread"},
+            "samples": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/trial"}}
           }
         }
       }

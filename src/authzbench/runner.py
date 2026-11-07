@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from authzbench.dataset import Dataset
 from authzbench.engine import Checker, Consistency, Engine
 from authzbench.engines.noop import NoopChecker
-from authzbench.measure import OpenLoopResult, RevocationResult, open_loop, race_revocation, service_time
+from authzbench.measure import OpenLoopResult, RevocationResult, open_loop, race_revocations, service_time
 from authzbench.relationships import Expectation
 from authzbench.timing import NANOS_PER_SECOND, LatencySummary
 
@@ -26,11 +26,14 @@ class RunPlan:
     open_loop_rates: tuple[int, ...] = (1_000, 10_000)
     open_loop_ns: int = 10 * NANOS_PER_SECOND
     revocation_cap_ns: int = 30 * NANOS_PER_SECOND
+    revocation_trials: int = 30
     placement: str = IN_PROCESS
 
     def __post_init__(self) -> None:
         if self.placement not in PLACEMENTS:
             raise ValueError(f"placement must be one of {', '.join(PLACEMENTS)}, not {self.placement!r}")
+        if self.revocation_trials < 1:
+            raise ValueError(f"a revocation needs at least one trial, not {self.revocation_trials}")
 
 
 @dataclass(frozen=True)
@@ -39,7 +42,8 @@ class ModeResult:
     mode: str
     service_time: LatencySummary
     open_loop: tuple[OpenLoopResult, ...]
-    revocation: RevocationResult
+    revocations: tuple[RevocationResult, ...]
+    revocation_trials: int
     placement: str
 
 
@@ -75,7 +79,9 @@ def run(engine: Engine, dataset: Dataset, plan: RunPlan) -> RunResult:
             service_time=service_time(engine, queries, consistency, plan.service_time_ns),
             open_loop=tuple(open_loop(engine, queries, consistency, rate, plan.open_loop_ns)
                             for rate in plan.open_loop_rates),
-            revocation=race_revocation(engine, engine, dataset.revocation, consistency, plan.revocation_cap_ns),
+            revocations=race_revocations(engine, engine, dataset.revocation, consistency, plan.revocation_cap_ns,
+                                         plan.revocation_trials),
+            revocation_trials=plan.revocation_trials,
             placement=plan.placement,
         )
         for consistency, mode in engine.modes().items()

@@ -4,7 +4,8 @@ from authzbench.dataset import SCALES
 from authzbench.engine import Consistency
 from authzbench.engines.calibration import CalibrationEngine, CalibrationProfile
 from authzbench.generator import generate
-from authzbench.measure import MeasurementError, open_loop, race_revocation, service_time
+from authzbench.measure import (MeasurementError, TrialSpread, open_loop, race_revocation, race_revocations,
+                                service_time)
 from authzbench.relationships import Change
 from authzbench.timing import SYSTEM_CLOCK
 
@@ -68,6 +69,34 @@ def test_a_check_that_waits_inside_the_call_for_the_revoke_is_charged_in_denied_
     result = race_revocation(engine, WaitsForTheToken(), dataset.revocation, Consistency.FRESH, SECOND, virtual_clock)
     assert result.staleness_ns == 0
     assert result.denied_by_ns == 300 * MILLIS + CHECK_COST
+
+
+def test_repeated_races_each_give_their_own_sample(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=500 * MILLIS, extra_latency_ns=CHECK_COST)
+    trials = race_revocations(engine, engine, dataset.revocation, Consistency.FASTEST, SECOND, 5, virtual_clock)
+
+    assert [trial.staleness_ns for trial in trials] == [500 * MILLIS] * 5
+    assert TrialSpread.of([trial.denied_by_ns for trial in trials]) == TrialSpread(
+        5, 500 * MILLIS + CHECK_COST, 500 * MILLIS + CHECK_COST, 500 * MILLIS + CHECK_COST)
+
+
+def test_a_capped_trial_ends_the_trials(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=300 * MILLIS, extra_latency_ns=CHECK_COST)
+    trials = race_revocations(engine, engine, dataset.revocation, Consistency.FASTEST, 100 * MILLIS, 30, virtual_clock)
+
+    assert len(trials) == 1 and trials[0].capped
+
+
+def test_a_revocation_needs_at_least_one_trial(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, extra_latency_ns=CHECK_COST)
+    with pytest.raises(MeasurementError, match="at least one trial"):
+        race_revocations(engine, engine, dataset.revocation, Consistency.FRESH, SECOND, 0, virtual_clock)
+
+
+def test_the_spread_of_trials_uses_the_nearest_rank():
+    assert TrialSpread.of(list(range(100, 0, -1))) == TrialSpread(100, 50, 99, 100)
+    assert TrialSpread.of([7]) == TrialSpread(1, 7, 7, 7)
+    assert TrialSpread.of([]) is None
 
 
 def test_the_race_restores_the_revoked_relationship(dataset, virtual_clock):

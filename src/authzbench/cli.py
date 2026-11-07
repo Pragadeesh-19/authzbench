@@ -101,6 +101,7 @@ def _run(arguments: argparse.Namespace) -> None:
         open_loop_rates=tuple(arguments.rates),
         open_loop_ns=_seconds(arguments.open_loop_seconds),
         revocation_cap_ns=_seconds(arguments.revocation_cap_seconds),
+        revocation_trials=arguments.revocation_trials,
         placement=arguments.placement,
     )
     engine = choice.build(arguments)
@@ -184,6 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_command.add_argument("--service-seconds", type=float, default=5.0)
     run_command.add_argument("--open-loop-seconds", type=float, default=10.0)
     run_command.add_argument("--revocation-cap-seconds", type=float, default=30.0)
+    run_command.add_argument("--revocation-trials", type=int, default=30, help="revocation races per mode")
     run_command.add_argument("--writer", help="the engine server, e.g. http://10.0.0.5:7700")
     run_command.add_argument("--public-key", type=Path, help="the writer's public signing key")
     run_command.add_argument("--read-wait-seconds", type=float,
