@@ -90,3 +90,27 @@ func AgreesWithTheReferenceAndSeesItsOwnRevokeWhenFresh(t *testing.T, target eng
 		t.Fatal("the engine reports no version")
 	}
 }
+
+func SeesItsOwnWritesWhenFreshWithoutTheirRevisions(t *testing.T, target engine.Engine) {
+	t.Helper()
+	ctx, data := context.Background(), Tiny(t)
+	if err := target.Load(ctx, data); err != nil {
+		t.Fatal(err)
+	}
+	denied := data.Expectations[slices.IndexFunc(data.Expectations, func(expectation dataset.Expectation) bool {
+		return !expectation.Allowed
+	})].Query
+	grant := dataset.Relationship{Resource: denied.Resource, Relation: "viewer", Subject: dataset.Subject{Object: denied.Subject}}
+	for _, step := range []struct {
+		operation engine.Operation
+		allowed   bool
+	}{{engine.Add, true}, {engine.Remove, false}} {
+		if _, err := target.Write(ctx, engine.Change{Operation: step.operation, Relationship: grant}); err != nil {
+			t.Fatal(err)
+		}
+		allowed, err := target.Check(ctx, denied, engine.Fresh, nil)
+		if err != nil || allowed != step.allowed {
+			t.Fatalf("after %v, a fresh check of %s = %v, %v; want %v", step.operation, denied, allowed, err, step.allowed)
+		}
+	}
+}

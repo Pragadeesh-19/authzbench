@@ -36,7 +36,8 @@ var (
 			if err != nil {
 				return nil, err
 			}
-			return spicedb.Dial(chosen.spicedbEndpoint, chosen.spicedbKey, string(schema))
+			return spicedb.Dial(chosen.spicedbEndpoint, chosen.spicedbKey, string(schema),
+				spicedb.FreshRead(chosen.spicedbFresh))
 		},
 		"openfga": func(chosen options, _ timing.Clock) (engine.Engine, error) {
 			if chosen.openfgaVersion == "" {
@@ -65,6 +66,7 @@ type options struct {
 	revocationTrials     int
 	spicedbEndpoint      string
 	spicedbKey           string
+	spicedbFresh         string
 	openfgaURL           string
 	openfgaVersion       string
 }
@@ -120,6 +122,8 @@ func parse(arguments []string) (options, error) {
 	flags.IntVar(&chosen.revocationTrials, "revocation-trials", 30, "revocation races per mode")
 	flags.StringVar(&chosen.spicedbEndpoint, "spicedb-endpoint", "localhost:50051", "SpiceDB gRPC address")
 	flags.StringVar(&chosen.spicedbKey, "spicedb-key", "authzbench", "SpiceDB preshared key")
+	flags.StringVar(&chosen.spicedbFresh, "spicedb-fresh", string(spicedb.FullyConsistent),
+		"how a fresh SpiceDB check reads: fully_consistent, or at_least_as_fresh as the latest write's ZedToken")
 	flags.StringVar(&chosen.openfgaURL, "openfga-url", "http://localhost:8080", "OpenFGA HTTP address")
 	flags.StringVar(&chosen.openfgaVersion, "openfga-version", "", "OpenFGA version, as pinned in services/compose.yaml")
 	if err := flags.Parse(arguments); err != nil {

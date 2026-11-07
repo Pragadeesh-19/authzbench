@@ -3,6 +3,8 @@ package spicedb
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sync/atomic"
 
 	"github.com/authzed/authzed-go/pkg/requestmeta"
 	"github.com/authzed/authzed-go/pkg/responsemeta"
@@ -22,31 +24,45 @@ const (
 	deletesPerDelete = 1000
 )
 
+type FreshRead string
+
+const (
+	FullyConsistent FreshRead = "fully_consistent"
+	AtLeastAsFresh  FreshRead = "at_least_as_fresh"
+)
+
 var (
-	consistencies = map[engine.Consistency]*v1.Consistency{
-		engine.Fresh:   {Requirement: &v1.Consistency_FullyConsistent{FullyConsistent: true}},
-		engine.Fastest: {Requirement: &v1.Consistency_MinimizeLatency{MinimizeLatency: true}},
-	}
-	operations = map[engine.Operation]v1.RelationshipUpdate_Operation{
+	FreshReads = []FreshRead{FullyConsistent, AtLeastAsFresh}
+
+	fullyConsistent = &v1.Consistency{Requirement: &v1.Consistency_FullyConsistent{FullyConsistent: true}}
+	minimizeLatency = &v1.Consistency{Requirement: &v1.Consistency_MinimizeLatency{MinimizeLatency: true}}
+	operations      = map[engine.Operation]v1.RelationshipUpdate_Operation{
 		engine.Add:    v1.RelationshipUpdate_OPERATION_TOUCH,
 		engine.Remove: v1.RelationshipUpdate_OPERATION_DELETE,
 	}
 )
 
+// Engine answers a fresh check either fully consistent or at least as fresh as a ZedToken: the revoke's token in a
+// race, otherwise the token of the latest write this engine made, as an application that keeps its last token would.
 type Engine struct {
-	client  *authzed.Client
-	schema  string
-	version string
+	client    *authzed.Client
+	schema    string
+	version   string
+	freshRead FreshRead
+	latest    atomic.Pointer[v1.ZedToken]
 }
 
-func Dial(endpoint, presharedKey, schema string) (*Engine, error) {
+func Dial(endpoint, presharedKey, schema string, freshRead FreshRead) (*Engine, error) {
+	if !slices.Contains(FreshReads, freshRead) {
+		return nil, fmt.Errorf("a fresh read is one of %v, not %q", FreshReads, freshRead)
+	}
 	client, err := authzed.NewClient(endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpcutil.WithInsecureBearerToken(presharedKey))
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{client: client, schema: schema}, nil
+	return &Engine{client: client, schema: schema, freshRead: freshRead}, nil
 }
 
 func (e *Engine) Name() string    { return "spicedb" }
@@ -54,7 +70,7 @@ func (e *Engine) Version() string { return e.version }
 
 func (e *Engine) Modes() []engine.Mode {
 	return []engine.Mode{
-		{Consistency: engine.Fresh, Name: "fully_consistent"},
+		{Consistency: engine.Fresh, Name: string(e.freshRead)},
 		{Consistency: engine.Fastest, Name: "minimize_latency"},
 	}
 }
@@ -74,9 +90,11 @@ func (e *Engine) Load(ctx context.Context, data *dataset.Dataset) error {
 		for index, relationship := range batch {
 			updates[index] = update(engine.Add, relationship)
 		}
-		if _, err := e.client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{Updates: updates}); err != nil {
+		response, err := e.client.WriteRelationships(ctx, &v1.WriteRelationshipsRequest{Updates: updates})
+		if err != nil {
 			return err
 		}
+		e.latest.Store(response.WrittenAt)
 	}
 	return nil
 }
@@ -88,12 +106,17 @@ func (e *Engine) Write(ctx context.Context, change engine.Change) (engine.Revisi
 	if err != nil {
 		return nil, err
 	}
+	e.latest.Store(response.WrittenAt)
 	return response.WrittenAt, nil
 }
 
-func (e *Engine) Check(ctx context.Context, query dataset.Query, consistency engine.Consistency, _ engine.Revision) (bool, error) {
+func (e *Engine) Check(ctx context.Context, query dataset.Query, consistency engine.Consistency, after engine.Revision) (bool, error) {
+	requirement, err := e.requirement(consistency, after)
+	if err != nil {
+		return false, err
+	}
 	response, err := e.client.CheckPermission(ctx, &v1.CheckPermissionRequest{
-		Consistency: consistencies[consistency],
+		Consistency: requirement,
 		Resource:    object(query.Resource),
 		Permission:  query.Permission,
 		Subject:     &v1.SubjectReference{Object: object(query.Subject)},
@@ -113,6 +136,25 @@ func (e *Engine) Check(ctx context.Context, query dataset.Query, consistency eng
 
 func (e *Engine) Close() error {
 	return e.client.Close()
+}
+
+func (e *Engine) requirement(consistency engine.Consistency, after engine.Revision) (*v1.Consistency, error) {
+	switch {
+	case consistency == engine.Fastest:
+		return minimizeLatency, nil
+	case consistency != engine.Fresh:
+		return nil, fmt.Errorf("unknown consistency %q", consistency)
+	case e.freshRead == FullyConsistent:
+		return fullyConsistent, nil
+	}
+	token, _ := after.(*v1.ZedToken)
+	if token == nil {
+		token = e.latest.Load()
+	}
+	if token == nil {
+		return nil, fmt.Errorf("an %s check needs a write to be as fresh as; none was made", AtLeastAsFresh)
+	}
+	return &v1.Consistency{Requirement: &v1.Consistency_AtLeastAsFresh{AtLeastAsFresh: token}}, nil
 }
 
 func (e *Engine) writeSchema(ctx context.Context) error {
