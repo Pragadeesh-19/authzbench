@@ -38,7 +38,7 @@ services:
   spicedb:
     <<: *spicedb
     command: ["serve"]
-    ports: ["50051:50051"]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:50051:50051"]
     depends_on:
       spicedb-migrate:
         condition: service_completed_successfully
@@ -55,7 +55,7 @@ services:
   openfga:
     <<: *openfga
     command: ["run"]
-    ports: ["8080:8080", "8081:8081"]
+    ports: ["${BIND_ADDRESS:-127.0.0.1}:8080:8080", "${BIND_ADDRESS:-127.0.0.1}:8081:8081"]
     depends_on:
       openfga-migrate:
         condition: service_completed_successfully
