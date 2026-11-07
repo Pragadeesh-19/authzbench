@@ -1,12 +1,15 @@
 """An engine on another machine: a small HTTP server for the engine and a client the driver measures through.
 
 The server holds one engine with its dataset already loaded, answers only the addresses it is told to allow, and
-speaks JSON over persistent HTTP/1.1 connections, so a check costs one round trip and no connection setup."""
+speaks JSON over persistent HTTP/1.1 connections, so a check costs one round trip and no connection setup. Both ends
+send without Nagle's delay: a reply written as headers then body would otherwise wait for the peer's delayed
+acknowledgement, about 40 ms on Linux, on every call."""
 
 from __future__ import annotations
 
 import http.client
 import json
+import socket
 import threading
 from collections.abc import Collection
 from dataclasses import asdict, dataclass
@@ -92,7 +95,7 @@ class RemoteEngine:
         parts = urlsplit(url)
         if parts.scheme != "http" or not parts.hostname or not parts.port:
             raise ValueError(f"an engine server address looks like http://10.0.0.5:7700, not {url!r}")
-        self._connection = http.client.HTTPConnection(parts.hostname, parts.port, timeout=timeout_s)
+        self._connection = _ImmediateConnection(parts.hostname, parts.port, timeout=timeout_s)
         self._description = self._call("GET", "/describe")
         self.name = self._description["engine"]
 
@@ -139,6 +142,12 @@ class RemoteEngine:
         return content
 
 
+class _ImmediateConnection(http.client.HTTPConnection):
+    def connect(self) -> None:
+        super().connect()
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
+
 class _AllowListServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -157,6 +166,7 @@ def _handler_for(server: EngineServer) -> type[BaseHTTPRequestHandler]:
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
+        disable_nagle_algorithm = True
 
         def do_GET(self) -> None:
             self._answer("GET")

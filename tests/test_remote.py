@@ -52,6 +52,19 @@ def test_a_remote_engine_answers_as_the_engine_it_serves(dataset, serve):
     assert engine.check(dataset.revocation.probe, Consistency.FRESH) is False
 
 
+def test_a_call_costs_a_round_trip_not_a_delayed_acknowledgement(dataset, serve):
+    engine = RemoteEngine(serve())
+    engine.load(dataset)
+    elapsed = []
+    for _ in range(50):
+        started = SYSTEM_CLOCK.now()
+        engine.write(Change.add(dataset.revocation.revoke))
+        engine.check(dataset.revocation.probe, Consistency.FRESH)
+        elapsed.append(SYSTEM_CLOCK.now() - started)
+
+    assert sorted(elapsed)[len(elapsed) // 2] < 20 * MILLIS
+
+
 def test_a_known_staleness_is_measured_across_the_wire_within_the_stated_resolution(dataset, serve):
     engine = RemoteEngine(serve(CalibrationProfile(staleness_ns=500 * MILLIS)))
     engine.load(dataset)
