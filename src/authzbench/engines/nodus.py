@@ -34,6 +34,10 @@ class NodusEngine:
     def in_memory(cls) -> NodusEngine:
         return cls(nodusdb.Graph())
 
+    @classmethod
+    def shipping(cls, path: str, shipping: nodusdb.Shipping) -> NodusEngine:
+        return cls(nodusdb.Graph(path=path, sync_mode="sync", shipping=shipping))
+
     @property
     def version(self) -> str:
         return nodusdb.__version__
@@ -56,6 +60,9 @@ class NodusEngine:
         else:
             transaction.remove(*_arguments(change.relationship))
         return Revision(self._graph.write(transaction))
+
+    def current_revision(self) -> Revision:
+        return Revision(self._graph.token)
 
     def check(self, query: CheckQuery, consistency: Consistency, after: Revision | None = None) -> bool:
         at_least = after.value if after is not None else None
