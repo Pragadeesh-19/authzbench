@@ -181,7 +181,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_command.add_argument("--dataset", type=Path, required=True)
     run_command.add_argument("--out", type=Path, required=True)
     run_command.add_argument("--placement", choices=PLACEMENTS, default=IN_PROCESS)
-    run_command.add_argument("--rates", type=_rates, default=[1_000, 10_000])
+    run_command.add_argument("--rates", type=_rates, default=[100, 500, 1_000, 10_000])
     run_command.add_argument("--service-seconds", type=float, default=5.0)
     run_command.add_argument("--open-loop-seconds", type=float, default=10.0)
     run_command.add_argument("--revocation-cap-seconds", type=float, default=30.0)

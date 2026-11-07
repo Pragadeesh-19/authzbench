@@ -114,7 +114,7 @@ func parse(arguments []string) (options, error) {
 	flags.StringVar(&chosen.out, "out", "", "results document to write")
 	flags.StringVar(&chosen.schemas, "schemas", "generated", "directory written by `authzbench emit`")
 	flags.StringVar(&chosen.placement, "placement", "same_machine", "where the driver runs: "+strings.Join(placements, ", "))
-	flags.StringVar(&chosen.rates, "rates", "1000,10000", "open-loop rates in checks per second")
+	flags.StringVar(&chosen.rates, "rates", "100,500,1000,10000", "open-loop rates in checks per second")
 	flags.IntVar(&chosen.inFlight, "in-flight", 256, "most open-loop checks outstanding at once")
 	flags.Float64Var(&chosen.serviceSeconds, "service-seconds", 5, "closed-loop duration per mode")
 	flags.Float64Var(&chosen.openLoopSeconds, "open-loop-seconds", 10, "open-loop duration per rate")

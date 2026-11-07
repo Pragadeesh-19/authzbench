@@ -23,7 +23,7 @@ class ConformanceError(RuntimeError):
 @dataclass(frozen=True)
 class RunPlan:
     service_time_ns: int = 5 * NANOS_PER_SECOND
-    open_loop_rates: tuple[int, ...] = (1_000, 10_000)
+    open_loop_rates: tuple[int, ...] = (100, 500, 1_000, 10_000)
     open_loop_ns: int = 10 * NANOS_PER_SECOND
     revocation_cap_ns: int = 30 * NANOS_PER_SECOND
     revocation_trials: int = 30
