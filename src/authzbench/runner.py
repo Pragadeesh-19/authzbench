@@ -10,6 +10,7 @@ from authzbench.relationships import Expectation
 from authzbench.timing import NANOS_PER_SECOND, LatencySummary
 
 IN_PROCESS = "in_process"
+PLACEMENTS = (IN_PROCESS, "same_machine", "second_machine")
 
 
 class ConformanceError(RuntimeError):
@@ -25,6 +26,11 @@ class RunPlan:
     open_loop_rates: tuple[int, ...] = (1_000, 10_000)
     open_loop_ns: int = 10 * NANOS_PER_SECOND
     revocation_cap_ns: int = 30 * NANOS_PER_SECOND
+    placement: str = IN_PROCESS
+
+    def __post_init__(self) -> None:
+        if self.placement not in PLACEMENTS:
+            raise ValueError(f"placement must be one of {', '.join(PLACEMENTS)}, not {self.placement!r}")
 
 
 @dataclass(frozen=True)
@@ -34,7 +40,7 @@ class ModeResult:
     service_time: LatencySummary
     open_loop: tuple[OpenLoopResult, ...]
     revocation: RevocationResult
-    placement: str = IN_PROCESS
+    placement: str
 
 
 @dataclass(frozen=True)
@@ -70,6 +76,7 @@ def run(engine: Engine, dataset: Dataset, plan: RunPlan) -> RunResult:
             open_loop=tuple(open_loop(engine, queries, consistency, rate, plan.open_loop_ns)
                             for rate in plan.open_loop_rates),
             revocation=race_revocation(engine, engine, dataset.revocation, consistency, plan.revocation_cap_ns),
+            placement=plan.placement,
         )
         for consistency, mode in engine.modes().items()
     )
