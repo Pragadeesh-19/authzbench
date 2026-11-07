@@ -46,6 +46,9 @@ class CalibrationEngine:
         self._revision += 1
         return Revision(self._revision)
 
+    def current_revision(self) -> Revision:
+        return Revision(self._revision)
+
     def check(self, query: CheckQuery, consistency: Consistency, after: Revision | None = None) -> bool:
         started = self._clock.now()
         self._wait_out_stall(started)
