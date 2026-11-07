@@ -44,6 +44,7 @@ SpiceDB and OpenFGA are services, so the Go driver measures them through their o
 docker compose -f services/compose.yaml up --detach --wait spicedb openfga
 go -C go build -o ../authzbench-go ./cmd/authzbench-go
 ./authzbench-go -engine spicedb -dataset data/S -out results/spicedb-S.json
+./authzbench-go -engine spicedb -spicedb-fresh at_least_as_fresh -dataset data/S -out results/spicedb-token-S.json
 ./authzbench-go -engine openfga -openfga-version v1.22.1 -dataset data/S -out results/openfga-S.json
 ```
 
