@@ -7,7 +7,7 @@ It measures two things that matter when access is revoked:
 - **Check latency when the answer must be fully up to date**, issued on an open-loop schedule so that slow stretches
   are counted, not skipped, and a closed-loop "service time" beside it.
 - **Time to revocation**: how long a removed permission keeps being allowed after the write that removed it was
-  acknowledged.
+  acknowledged, as a distribution over 30 races per mode.
 
 Every engine answers the same schema, generated from one model, over the same seeded dataset, and must agree with a
 reference evaluator before anything is timed. Every number in a results file can be reproduced from its seed.
