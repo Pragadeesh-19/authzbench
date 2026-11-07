@@ -16,6 +16,10 @@ x-spicedb: &spicedb
     SPICEDB_DATASTORE_ENGINE: postgres
     SPICEDB_DATASTORE_CONN_URI: postgres://postgres:authzbench@spicedb-postgres:5432/postgres?sslmode=disable
     SPICEDB_GRPC_PRESHARED_KEY: authzbench
+    SPICEDB_DATASTORE_CONN_POOL_READ_MAX_OPEN: "60"
+    SPICEDB_DATASTORE_CONN_POOL_READ_MIN_OPEN: "30"
+    SPICEDB_DATASTORE_CONN_POOL_WRITE_MAX_OPEN: "40"
+    SPICEDB_DATASTORE_CONN_POOL_WRITE_MIN_OPEN: "20"
 
 x-openfga: &openfga
   image: openfga/openfga:v1.22.1@sha256:b852071314f1fda1194d341a6ebac0a4f619b3cd87a6626d2ccc7048af4ec671
@@ -24,6 +28,13 @@ x-openfga: &openfga
     OPENFGA_DATASTORE_URI: postgres://postgres:authzbench@openfga-postgres:5432/postgres?sslmode=disable
     OPENFGA_CHECK_QUERY_CACHE_ENABLED: "true"
     OPENFGA_PLAYGROUND_ENABLED: "false"
+    OPENFGA_DATASTORE_MAX_OPEN_CONNS: "100"
+    OPENFGA_DATASTORE_MIN_OPEN_CONNS: "30"
+    OPENFGA_DATASTORE_MAX_IDLE_CONNS: "100"
+    OPENFGA_DATASTORE_MIN_IDLE_CONNS: "20"
+    OPENFGA_DATASTORE_CONN_MAX_IDLE_TIME: "30m"
+    OPENFGA_LOG_FORMAT: json
+    OPENFGA_LOG_LEVEL: info
 
 services:
   spicedb-postgres: *postgres
