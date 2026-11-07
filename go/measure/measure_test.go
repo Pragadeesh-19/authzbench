@@ -119,6 +119,62 @@ func TestARevokeNeverSeenInsideTheCapIsReportedAsCapped(t *testing.T) {
 	}
 }
 
+func TestRepeatedRacesEachGiveTheirOwnSample(t *testing.T) {
+	data, clock := tinyDataset(t), &virtualclock.Clock{}
+	target := loaded(t, data, calibration.Profile{StalenessNs: 500 * millis, ExtraLatencyNs: checkCost}, clock)
+	trials, err := measure.RaceRevocations(context.Background(), target, target, data.Revocation, engine.Fastest,
+		second, 5, clock)
+	if err != nil || len(trials) != 5 {
+		t.Fatalf("trials = %+v, err = %v", trials, err)
+	}
+	deniedBy := make([]int64, 0, len(trials))
+	for _, trial := range trials {
+		if trial.StalenessNs == nil || *trial.StalenessNs != 500*millis {
+			t.Fatalf("trial = %+v", trial)
+		}
+		deniedBy = append(deniedBy, *trial.DeniedByNs)
+	}
+	want := measure.TrialSpread{Count: 5, P50: 500*millis + checkCost, P99: 500*millis + checkCost, Max: 500*millis + checkCost}
+	if spread := measure.SpreadOf(deniedBy); *spread != want {
+		t.Fatalf("spread = %+v", spread)
+	}
+}
+
+func TestACappedTrialEndsTheTrials(t *testing.T) {
+	data, clock := tinyDataset(t), &virtualclock.Clock{}
+	target := loaded(t, data, calibration.Profile{StalenessNs: 300 * millis, ExtraLatencyNs: checkCost}, clock)
+	trials, err := measure.RaceRevocations(context.Background(), target, target, data.Revocation, engine.Fastest,
+		100*millis, 30, clock)
+	if err != nil || len(trials) != 1 || !trials[0].Capped() {
+		t.Fatalf("trials = %+v, err = %v", trials, err)
+	}
+}
+
+func TestARevocationNeedsAtLeastOneTrial(t *testing.T) {
+	data, clock := tinyDataset(t), &virtualclock.Clock{}
+	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: checkCost}, clock)
+	_, err := measure.RaceRevocations(context.Background(), target, target, data.Revocation, engine.Fresh, second, 0, clock)
+	if err == nil || !strings.Contains(err.Error(), "at least one trial") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestTheSpreadOfTrialsUsesTheNearestRank(t *testing.T) {
+	values := make([]int64, 0, 100)
+	for value := int64(100); value >= 1; value-- {
+		values = append(values, value)
+	}
+	if spread := measure.SpreadOf(values); *spread != (measure.TrialSpread{Count: 100, P50: 50, P99: 99, Max: 100}) {
+		t.Fatalf("spread = %+v", spread)
+	}
+	if spread := measure.SpreadOf([]int64{7}); *spread != (measure.TrialSpread{Count: 1, P50: 7, P99: 7, Max: 7}) {
+		t.Fatalf("spread = %+v", spread)
+	}
+	if measure.SpreadOf(nil) != nil {
+		t.Fatal("an empty spread is not nil")
+	}
+}
+
 func TestTheRaceRestoresTheRevokedRelationship(t *testing.T) {
 	data, clock := tinyDataset(t), &virtualclock.Clock{}
 	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: checkCost}, clock)

@@ -13,20 +13,22 @@ import (
 )
 
 type Plan struct {
-	ServiceTimeNs   int64
-	OpenLoopRates   []int64
-	OpenLoopNs      int64
-	RevocationCapNs int64
-	InFlight        int
-	Placement       string
+	ServiceTimeNs    int64
+	OpenLoopRates    []int64
+	OpenLoopNs       int64
+	RevocationCapNs  int64
+	RevocationTrials int
+	InFlight         int
+	Placement        string
 }
 
 type ModeResult struct {
-	Mode        engine.Mode
-	ServiceTime timing.Summary
-	OpenLoop    []measure.OpenLoopResult
-	Revocation  measure.RevocationResult
-	Placement   string
+	Mode             engine.Mode
+	ServiceTime      timing.Summary
+	OpenLoop         []measure.OpenLoopResult
+	Revocations      []measure.RevocationResult
+	RevocationTrials int
+	Placement        string
 }
 
 type RunResult struct {
@@ -108,13 +110,13 @@ func measureMode(ctx context.Context, target engine.Engine, data *dataset.Datase
 	if err != nil {
 		return ModeResult{}, err
 	}
-	revocation, err := measure.RaceRevocation(ctx, target, target, data.Revocation, mode.Consistency,
-		plan.RevocationCapNs, clock)
+	revocations, err := measure.RaceRevocations(ctx, target, target, data.Revocation, mode.Consistency,
+		plan.RevocationCapNs, plan.RevocationTrials, clock)
 	if err != nil {
 		return ModeResult{}, err
 	}
-	return ModeResult{Mode: mode, ServiceTime: serviceTime, OpenLoop: openLoop, Revocation: revocation,
-		Placement: plan.Placement}, nil
+	return ModeResult{Mode: mode, ServiceTime: serviceTime, OpenLoop: openLoop, Revocations: revocations,
+		RevocationTrials: plan.RevocationTrials, Placement: plan.Placement}, nil
 }
 
 func openLoops(ctx context.Context, checker engine.Checker, queries []dataset.Query, consistency engine.Consistency,

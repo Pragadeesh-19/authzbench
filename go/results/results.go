@@ -13,7 +13,7 @@ import (
 	"github.com/Pragadeesh-19/authzbench/go/timing"
 )
 
-const Format = "authzbench.results/1"
+const Format = "authzbench.results/2"
 
 type Document struct {
 	Format         string                   `json:"format"`
@@ -59,12 +59,23 @@ type Mode struct {
 }
 
 type Revocation struct {
-	Placement    string `json:"placement"`
+	Placement       string               `json:"placement"`
+	CapNs           int64                `json:"cap_ns"`
+	TrialsRequested int                  `json:"trials_requested"`
+	Trials          int                  `json:"trials"`
+	Capped          int                  `json:"capped"`
+	StalenessNs     *measure.TrialSpread `json:"staleness_ns"`
+	DeniedByNs      *measure.TrialSpread `json:"denied_by_ns"`
+	ResolutionNs    *measure.TrialSpread `json:"resolution_ns"`
+	WriteNs         *measure.TrialSpread `json:"write_ns"`
+	Samples         []Trial              `json:"samples"`
+}
+
+type Trial struct {
 	StalenessNs  *int64 `json:"staleness_ns"`
 	ResolutionNs int64  `json:"resolution_ns"`
 	DeniedByNs   *int64 `json:"denied_by_ns"`
 	WriteNs      int64  `json:"write_ns"`
-	CapNs        int64  `json:"cap_ns"`
 }
 
 func CurrentEnvironment() Environment {
@@ -91,17 +102,30 @@ func FromRun(result runner.RunResult, environment Environment) Document {
 			Mode:        mode.Mode.Name,
 			ServiceTime: mode.ServiceTime,
 			OpenLoop:    mode.OpenLoop,
-			Revocation: Revocation{
-				Placement:    mode.Placement,
-				StalenessNs:  mode.Revocation.StalenessNs,
-				ResolutionNs: mode.Revocation.ResolutionNs,
-				DeniedByNs:   mode.Revocation.DeniedByNs,
-				WriteNs:      mode.Revocation.WriteNs,
-				CapNs:        mode.Revocation.CapNs,
-			},
+			Revocation:  revocation(mode),
 		})
 	}
 	return document
+}
+
+func revocation(mode runner.ModeResult) Revocation {
+	trials := mode.Revocations
+	summary := Revocation{Placement: mode.Placement, CapNs: trials[0].CapNs, TrialsRequested: mode.RevocationTrials,
+		Trials: len(trials)}
+	var staleness, deniedBy, resolution, write []int64
+	for _, trial := range trials {
+		summary.Samples = append(summary.Samples, Trial{StalenessNs: trial.StalenessNs, ResolutionNs: trial.ResolutionNs,
+			DeniedByNs: trial.DeniedByNs, WriteNs: trial.WriteNs})
+		resolution, write = append(resolution, trial.ResolutionNs), append(write, trial.WriteNs)
+		if trial.Capped() {
+			summary.Capped++
+			continue
+		}
+		staleness, deniedBy = append(staleness, *trial.StalenessNs), append(deniedBy, *trial.DeniedByNs)
+	}
+	summary.StalenessNs, summary.DeniedByNs = measure.SpreadOf(staleness), measure.SpreadOf(deniedBy)
+	summary.ResolutionNs, summary.WriteNs = measure.SpreadOf(resolution), measure.SpreadOf(write)
+	return summary
 }
 
 func describe(data *dataset.Dataset) DatasetInfo {

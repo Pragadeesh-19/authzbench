@@ -3,6 +3,8 @@ package measure
 import (
 	"context"
 	"fmt"
+	"math"
+	"slices"
 
 	"github.com/Pragadeesh-19/authzbench/go/dataset"
 	"github.com/Pragadeesh-19/authzbench/go/engine"
@@ -25,6 +27,48 @@ type RevocationResult struct {
 }
 
 func (r RevocationResult) Capped() bool { return r.StalenessNs == nil }
+
+type TrialSpread struct {
+	Count int   `json:"count"`
+	P50   int64 `json:"p50_ns"`
+	P99   int64 `json:"p99_ns"`
+	Max   int64 `json:"max_ns"`
+}
+
+func SpreadOf(values []int64) *TrialSpread {
+	if len(values) == 0 {
+		return nil
+	}
+	ordered := slices.Clone(values)
+	slices.Sort(ordered)
+	return &TrialSpread{Count: len(ordered), P50: nearestRank(ordered, 0.50), P99: nearestRank(ordered, 0.99),
+		Max: ordered[len(ordered)-1]}
+}
+
+func nearestRank(ordered []int64, quantile float64) int64 {
+	return ordered[max(0, int(math.Ceil(quantile*float64(len(ordered))))-1)]
+}
+
+// RaceRevocations runs the race up to trials times; a capped trial ends the run, since no further trial can say more
+// than "> cap" and its restore may take as long to appear.
+func RaceRevocations(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Revocation,
+	consistency engine.Consistency, capNs int64, trials int, clock timing.Clock) ([]RevocationResult, error) {
+	if trials < 1 {
+		return nil, fmt.Errorf("a revocation needs at least one trial, not %d", trials)
+	}
+	results := make([]RevocationResult, 0, trials)
+	for range trials {
+		result, err := RaceRevocation(ctx, writer, checker, scenario, consistency, capNs, clock)
+		if err != nil {
+			return results, err
+		}
+		results = append(results, result)
+		if result.Capped() {
+			break
+		}
+	}
+	return results, nil
+}
 
 func ServiceTime(ctx context.Context, checker engine.Checker, queries []dataset.Query, consistency engine.Consistency,
 	duration int64, clock timing.Clock) (timing.Summary, error) {

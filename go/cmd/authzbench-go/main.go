@@ -62,6 +62,7 @@ type options struct {
 	serviceSeconds       float64
 	openLoopSeconds      float64
 	revocationCapSeconds float64
+	revocationTrials     int
 	spicedbEndpoint      string
 	spicedbKey           string
 	openfgaURL           string
@@ -116,6 +117,7 @@ func parse(arguments []string) (options, error) {
 	flags.Float64Var(&chosen.serviceSeconds, "service-seconds", 5, "closed-loop duration per mode")
 	flags.Float64Var(&chosen.openLoopSeconds, "open-loop-seconds", 10, "open-loop duration per rate")
 	flags.Float64Var(&chosen.revocationCapSeconds, "revocation-cap-seconds", 30, "longest wait for a revoke")
+	flags.IntVar(&chosen.revocationTrials, "revocation-trials", 30, "revocation races per mode")
 	flags.StringVar(&chosen.spicedbEndpoint, "spicedb-endpoint", "localhost:50051", "SpiceDB gRPC address")
 	flags.StringVar(&chosen.spicedbKey, "spicedb-key", "authzbench", "SpiceDB preshared key")
 	flags.StringVar(&chosen.openfgaURL, "openfga-url", "http://localhost:8080", "OpenFGA HTTP address")
@@ -145,12 +147,13 @@ func planFrom(chosen options) (runner.Plan, error) {
 		rates = append(rates, rate)
 	}
 	return runner.Plan{
-		ServiceTimeNs:   nanoseconds(chosen.serviceSeconds),
-		OpenLoopRates:   rates,
-		OpenLoopNs:      nanoseconds(chosen.openLoopSeconds),
-		RevocationCapNs: nanoseconds(chosen.revocationCapSeconds),
-		InFlight:        chosen.inFlight,
-		Placement:       chosen.placement,
+		ServiceTimeNs:    nanoseconds(chosen.serviceSeconds),
+		OpenLoopRates:    rates,
+		OpenLoopNs:       nanoseconds(chosen.openLoopSeconds),
+		RevocationCapNs:  nanoseconds(chosen.revocationCapSeconds),
+		RevocationTrials: chosen.revocationTrials,
+		InFlight:         chosen.inFlight,
+		Placement:        chosen.placement,
 	}, nil
 }
 

@@ -24,7 +24,7 @@ var schemaPath = filepath.Join("..", "..", "src", "authzbench", "results.schema.
 
 func shortPlan() runner.Plan {
 	return runner.Plan{ServiceTimeNs: 100 * millis, OpenLoopRates: []int64{500}, OpenLoopNs: 200 * millis,
-		RevocationCapNs: 100 * millis, InFlight: 1, Placement: "same_machine"}
+		RevocationCapNs: 100 * millis, RevocationTrials: 3, InFlight: 1, Placement: "same_machine"}
 }
 
 func run(t *testing.T, profile calibration.Profile) results.Document {
@@ -83,6 +83,13 @@ func TestACappedRevocationIsWrittenAsNullStaleness(t *testing.T) {
 	stale := document.Modes[1]
 	if stale.Consistency != string(engine.Fastest) || stale.Revocation.StalenessNs != nil {
 		t.Fatalf("stale mode = %+v", stale)
+	}
+	if revocation := stale.Revocation; revocation.TrialsRequested != 3 || revocation.Trials != 1 ||
+		revocation.Capped != 1 {
+		t.Fatalf("a capped trial did not end the trials: %+v", revocation)
+	}
+	if fresh := document.Modes[0].Revocation; fresh.Trials != 3 || len(fresh.Samples) != 3 || fresh.Capped != 0 {
+		t.Fatalf("fresh trials = %+v", fresh)
 	}
 	encoded, _ := json.Marshal(stale.Revocation)
 	if !bytes.Contains(encoded, []byte(`"staleness_ns":null`)) {
