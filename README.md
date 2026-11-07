@@ -54,6 +54,31 @@ The Go tests run the adapters against the real servers when `AUTHZBENCH_SPICEDB_
 cd go && go test ./...
 ```
 
+## Two machines
+
+The revocation race also runs across a network, timed on one clock. Machine 1 runs every writer; machine 2 runs the
+driver, so every revoke and every check is timed on machine 2's clock, and the published number counts the reply's
+trip back as part of the race. Both machines sit in one private network.
+
+On machine 1, with S3 credentials in `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`:
+
+```sh
+BIND_ADDRESS=10.0.0.5 docker compose -f services/compose.yaml up --detach --wait spicedb openfga
+authzbench serve --engine nodus-writer --dataset data/S --listen 10.0.0.5:7700 --allow 10.0.0.6     --graph nodus-writer --signing-key keys/signing.pem --bucket my-bucket --region eu-north-1
+```
+
+The writer makes `keys/signing.pem` when it is missing; copy `keys/signing.pub` to machine 2. On machine 2, with the
+same credentials:
+
+```sh
+authzbench run --engine nodus-follower --placement second_machine --writer http://10.0.0.5:7700     --public-key signing.pub --bucket my-bucket --region eu-north-1 --dataset data/S --out results/follower-S.json
+./authzbench-go -engine spicedb -placement second_machine -spicedb-endpoint 10.0.0.5:50051     -dataset data/S -out results/spicedb-S-remote.json
+```
+
+`authzbench serve --engine calibration` on machine 1 and `authzbench run --engine remote-calibration` on machine 2
+measure the 500 ms calibration engine across the same network, which proves the timing before any engine is timed.
+The server answers only the addresses in `--allow`.
+
 ## License
 
 Apache License 2.0.
