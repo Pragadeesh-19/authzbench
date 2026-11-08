@@ -18,16 +18,16 @@ The [run of 2026-11-07](runs/2026-11-07) measured NodusDB 0.1.1, SpiceDB v1.57.0
 dataset sizes on two c5.2xlarge machines in AWS eu-north-1. Every engine agreed with the reference evaluator on every
 check before it was timed. At 560,497 relationships:
 
-| Engine and consistency mode | Check, p50 | Check, p99 | At 1,000 checks/s, p50 | A revoked permission still granted for, longest of 90 races |
-|---|---:|---:|---:|---|
-| NodusDB, in process | 9 µs | 17 µs | 12 µs | never |
-| NodusDB follower, with the write's token | 10 µs | 19 µs | 13 µs | never; a check right after the write waits about 140 ms |
-| NodusDB follower, without a token | 9 µs | 18 µs | 12 µs | 0.30 s |
-| OpenFGA `HIGHER_CONSISTENCY` | 3.6 ms | 22.7 ms | 6.6 s | never |
-| OpenFGA `MINIMIZE_LATENCY`, check cache on | 3.2 ms | 21.6 ms | 6.3 s | 10.0 s |
-| SpiceDB `at_least_as_fresh` | 4.3 ms | 16.2 ms | 5.6 s | never |
-| SpiceDB `fully_consistent` | 4.5 ms | 16.5 ms | 5.5 s | never |
-| SpiceDB `minimize_latency` | 4.3 ms | 15.5 ms | 5.4 s | 3.5 s |
+| Engine and consistency mode | At 100 checks/s, p50 | At 1,000 checks/s, p50 | One at a time, p50 | One at a time, p99 | A revoked permission still granted for, longest of 90 races |
+|---|---:|---:|---:|---:|---|
+| NodusDB, in process | 14 µs | 12 µs | 9 µs | 17 µs | never |
+| NodusDB follower, with the write's token | 27 µs | 13 µs | 10 µs | 19 µs | never; a check right after the write waits about 140 ms |
+| NodusDB follower, without a token | 16 µs | 12 µs | 9 µs | 18 µs | 0.30 s |
+| OpenFGA `HIGHER_CONSISTENCY` | 3.7 ms | 6.6 s | 3.6 ms | 22.7 ms | never |
+| OpenFGA `MINIMIZE_LATENCY`, check cache on | 0.62 ms | 6.3 s | 3.2 ms | 21.6 ms | 10.0 s |
+| SpiceDB `at_least_as_fresh` | 4.3 ms | 5.6 s | 4.3 ms | 16.2 ms | never |
+| SpiceDB `fully_consistent` | 4.6 ms | 5.5 s | 4.5 ms | 16.5 ms | never |
+| SpiceDB `minimize_latency` | 4.2 ms | 5.4 s | 4.3 ms | 15.5 ms | 3.5 s |
 
 The services were driven from a second machine by Go with up to 256 checks in flight, and NodusDB by Python with one.
 At 1,000 checks a second SpiceDB and OpenFGA used 93 to 100% of the 8-vCPU machine they shared with their Postgres,
