@@ -1,0 +1,696 @@
+{
+  "format": "authzbench.results/2",
+  "engine": {
+    "name": "spicedb",
+    "version": "v1.57.0"
+  },
+  "dataset": {
+    "model": "document-sharing",
+    "scale": "M",
+    "seed": 1,
+    "relationships": 55756,
+    "checks": 10000
+  },
+  "environment": {
+    "recorded_at": "2026-11-07T17:40:00Z",
+    "go": "go1.26.8",
+    "platform": "linux/amd64",
+    "cpus": 8
+  },
+  "conformance": {
+    "checks": 10001,
+    "mismatches": 0
+  },
+  "driver_baseline": [
+    {
+      "rate_per_second": 100,
+      "in_flight": 256,
+      "latency": {
+        "count": 1000,
+        "p50_ns": 9679,
+        "p99_ns": 14967,
+        "p999_ns": 18303,
+        "max_ns": 31167
+      },
+      "schedule_lag": {
+        "count": 1000,
+        "p50_ns": 9599,
+        "p99_ns": 14807,
+        "p999_ns": 18207,
+        "max_ns": 30943
+      }
+    },
+    {
+      "rate_per_second": 500,
+      "in_flight": 256,
+      "latency": {
+        "count": 5000,
+        "p50_ns": 72767,
+        "p99_ns": 77567,
+        "p999_ns": 81855,
+        "max_ns": 95039
+      },
+      "schedule_lag": {
+        "count": 5000,
+        "p50_ns": 72703,
+        "p99_ns": 77439,
+        "p999_ns": 81727,
+        "max_ns": 94783
+      }
+    },
+    {
+      "rate_per_second": 1000,
+      "in_flight": 256,
+      "latency": {
+        "count": 10000,
+        "p50_ns": 72511,
+        "p99_ns": 80575,
+        "p999_ns": 92287,
+        "max_ns": 103359
+      },
+      "schedule_lag": {
+        "count": 10000,
+        "p50_ns": 72447,
+        "p99_ns": 80447,
+        "p999_ns": 92095,
+        "max_ns": 103231
+      }
+    },
+    {
+      "rate_per_second": 10000,
+      "in_flight": 256,
+      "latency": {
+        "count": 100000,
+        "p50_ns": 68479,
+        "p99_ns": 78399,
+        "p999_ns": 85119,
+        "max_ns": 143231
+      },
+      "schedule_lag": {
+        "count": 100000,
+        "p50_ns": 68415,
+        "p99_ns": 78335,
+        "p999_ns": 85055,
+        "max_ns": 142975
+      }
+    }
+  ],
+  "modes": [
+    {
+      "consistency": "fresh",
+      "mode": "at_least_as_fresh",
+      "service_time": {
+        "count": 1490,
+        "p50_ns": 2541567,
+        "p99_ns": 8970239,
+        "p999_ns": 12279807,
+        "max_ns": 12296191
+      },
+      "open_loop": [
+        {
+          "rate_per_second": 100,
+          "in_flight": 256,
+          "latency": {
+            "count": 1000,
+            "p50_ns": 2473983,
+            "p99_ns": 8994815,
+            "p999_ns": 11010047,
+            "max_ns": 11706367
+          },
+          "schedule_lag": {
+            "count": 1000,
+            "p50_ns": 9271,
+            "p99_ns": 14055,
+            "p999_ns": 17087,
+            "max_ns": 17743
+          }
+        },
+        {
+          "rate_per_second": 500,
+          "in_flight": 256,
+          "latency": {
+            "count": 5000,
+            "p50_ns": 3485695,
+            "p99_ns": 21970943,
+            "p999_ns": 30457855,
+            "max_ns": 41517055
+          },
+          "schedule_lag": {
+            "count": 5000,
+            "p50_ns": 73087,
+            "p99_ns": 90815,
+            "p999_ns": 102655,
+            "max_ns": 136831
+          }
+        },
+        {
+          "rate_per_second": 1000,
+          "in_flight": 256,
+          "latency": {
+            "count": 10000,
+            "p50_ns": 2522873855,
+            "p99_ns": 5108662271,
+            "p999_ns": 5276434431,
+            "max_ns": 5385486335
+          },
+          "schedule_lag": {
+            "count": 10000,
+            "p50_ns": 2144337919,
+            "p99_ns": 4563402751,
+            "p999_ns": 4622123007,
+            "max_ns": 4626317311
+          }
+        },
+        {
+          "rate_per_second": 10000,
+          "in_flight": 256,
+          "latency": {
+            "count": 100000,
+            "p50_ns": 68987912191,
+            "p99_ns": 136365211647,
+            "p999_ns": 137707388927,
+            "max_ns": 137841606655
+          },
+          "schedule_lag": {
+            "count": 100000,
+            "p50_ns": 68518150143,
+            "p99_ns": 135962558463,
+            "p999_ns": 137304735743,
+            "max_ns": 137438953471
+          }
+        }
+      ],
+      "revocation": {
+        "placement": "second_machine",
+        "cap_ns": 30000000000,
+        "trials_requested": 30,
+        "trials": 30,
+        "capped": 0,
+        "staleness_ns": {
+          "count": 30,
+          "p50_ns": 105,
+          "p99_ns": 185,
+          "max_ns": 185
+        },
+        "denied_by_ns": {
+          "count": 30,
+          "p50_ns": 2817488,
+          "p99_ns": 3340448,
+          "max_ns": 3340448
+        },
+        "resolution_ns": {
+          "count": 30,
+          "p50_ns": 105,
+          "p99_ns": 185,
+          "max_ns": 185
+        },
+        "write_ns": {
+          "count": 30,
+          "p50_ns": 2339164,
+          "p99_ns": 3493993,
+          "max_ns": 3493993
+        },
+        "samples": [
+          {
+            "staleness_ns": 93,
+            "resolution_ns": 93,
+            "denied_by_ns": 3181581,
+            "write_ns": 3493993
+          },
+          {
+            "staleness_ns": 185,
+            "resolution_ns": 185,
+            "denied_by_ns": 2915496,
+            "write_ns": 2622167
+          },
+          {
+            "staleness_ns": 125,
+            "resolution_ns": 125,
+            "denied_by_ns": 3340448,
+            "write_ns": 2500272
+          },
+          {
+            "staleness_ns": 106,
+            "resolution_ns": 106,
+            "denied_by_ns": 3173506,
+            "write_ns": 2678545
+          },
+          {
+            "staleness_ns": 130,
+            "resolution_ns": 130,
+            "denied_by_ns": 2609460,
+            "write_ns": 2468939
+          },
+          {
+            "staleness_ns": 124,
+            "resolution_ns": 124,
+            "denied_by_ns": 2857143,
+            "write_ns": 2347877
+          },
+          {
+            "staleness_ns": 101,
+            "resolution_ns": 101,
+            "denied_by_ns": 2612558,
+            "write_ns": 2232497
+          },
+          {
+            "staleness_ns": 111,
+            "resolution_ns": 111,
+            "denied_by_ns": 2630264,
+            "write_ns": 2447357
+          },
+          {
+            "staleness_ns": 118,
+            "resolution_ns": 118,
+            "denied_by_ns": 2863287,
+            "write_ns": 2206080
+          },
+          {
+            "staleness_ns": 107,
+            "resolution_ns": 107,
+            "denied_by_ns": 2627207,
+            "write_ns": 2264781
+          },
+          {
+            "staleness_ns": 100,
+            "resolution_ns": 100,
+            "denied_by_ns": 2578960,
+            "write_ns": 2153547
+          },
+          {
+            "staleness_ns": 91,
+            "resolution_ns": 91,
+            "denied_by_ns": 2943322,
+            "write_ns": 2130169
+          },
+          {
+            "staleness_ns": 62,
+            "resolution_ns": 62,
+            "denied_by_ns": 2912817,
+            "write_ns": 2420266
+          },
+          {
+            "staleness_ns": 102,
+            "resolution_ns": 102,
+            "denied_by_ns": 2832044,
+            "write_ns": 2461509
+          },
+          {
+            "staleness_ns": 72,
+            "resolution_ns": 72,
+            "denied_by_ns": 3117209,
+            "write_ns": 2335219
+          },
+          {
+            "staleness_ns": 122,
+            "resolution_ns": 122,
+            "denied_by_ns": 2910501,
+            "write_ns": 2451738
+          },
+          {
+            "staleness_ns": 120,
+            "resolution_ns": 120,
+            "denied_by_ns": 2874799,
+            "write_ns": 2378493
+          },
+          {
+            "staleness_ns": 112,
+            "resolution_ns": 112,
+            "denied_by_ns": 2543848,
+            "write_ns": 2281848
+          },
+          {
+            "staleness_ns": 94,
+            "resolution_ns": 94,
+            "denied_by_ns": 2798834,
+            "write_ns": 2243647
+          },
+          {
+            "staleness_ns": 113,
+            "resolution_ns": 113,
+            "denied_by_ns": 2867540,
+            "write_ns": 2223928
+          },
+          {
+            "staleness_ns": 104,
+            "resolution_ns": 104,
+            "denied_by_ns": 2573923,
+            "write_ns": 2339164
+          },
+          {
+            "staleness_ns": 103,
+            "resolution_ns": 103,
+            "denied_by_ns": 2643577,
+            "write_ns": 2236496
+          },
+          {
+            "staleness_ns": 115,
+            "resolution_ns": 115,
+            "denied_by_ns": 2763235,
+            "write_ns": 2277318
+          },
+          {
+            "staleness_ns": 102,
+            "resolution_ns": 102,
+            "denied_by_ns": 2834270,
+            "write_ns": 2386747
+          },
+          {
+            "staleness_ns": 105,
+            "resolution_ns": 105,
+            "denied_by_ns": 2817488,
+            "write_ns": 2412024
+          },
+          {
+            "staleness_ns": 66,
+            "resolution_ns": 66,
+            "denied_by_ns": 2874666,
+            "write_ns": 2410604
+          },
+          {
+            "staleness_ns": 119,
+            "resolution_ns": 119,
+            "denied_by_ns": 2708695,
+            "write_ns": 2346356
+          },
+          {
+            "staleness_ns": 62,
+            "resolution_ns": 62,
+            "denied_by_ns": 2760391,
+            "write_ns": 2327628
+          },
+          {
+            "staleness_ns": 106,
+            "resolution_ns": 106,
+            "denied_by_ns": 2814920,
+            "write_ns": 2330629
+          },
+          {
+            "staleness_ns": 100,
+            "resolution_ns": 100,
+            "denied_by_ns": 2552760,
+            "write_ns": 2239920
+          }
+        ]
+      }
+    },
+    {
+      "consistency": "fastest",
+      "mode": "minimize_latency",
+      "service_time": {
+        "count": 1463,
+        "p50_ns": 2582527,
+        "p99_ns": 9150463,
+        "p999_ns": 17350655,
+        "max_ns": 18300927
+      },
+      "open_loop": [
+        {
+          "rate_per_second": 100,
+          "in_flight": 256,
+          "latency": {
+            "count": 1000,
+            "p50_ns": 2537471,
+            "p99_ns": 9093119,
+            "p999_ns": 17203199,
+            "max_ns": 18251775
+          },
+          "schedule_lag": {
+            "count": 1000,
+            "p50_ns": 9559,
+            "p99_ns": 14271,
+            "p999_ns": 16559,
+            "max_ns": 20431
+          }
+        },
+        {
+          "rate_per_second": 500,
+          "in_flight": 256,
+          "latency": {
+            "count": 5000,
+            "p50_ns": 3633151,
+            "p99_ns": 23429119,
+            "p999_ns": 36110335,
+            "max_ns": 40992767
+          },
+          "schedule_lag": {
+            "count": 5000,
+            "p50_ns": 74047,
+            "p99_ns": 83583,
+            "p999_ns": 100735,
+            "max_ns": 152447
+          }
+        },
+        {
+          "rate_per_second": 1000,
+          "in_flight": 256,
+          "latency": {
+            "count": 10000,
+            "p50_ns": 2470445055,
+            "p99_ns": 4999610367,
+            "p999_ns": 5146411007,
+            "max_ns": 5221908479
+          },
+          "schedule_lag": {
+            "count": 10000,
+            "p50_ns": 2118123519,
+            "p99_ns": 4441767935,
+            "p999_ns": 4508876799,
+            "max_ns": 4513071103
+          }
+        },
+        {
+          "rate_per_second": 10000,
+          "in_flight": 256,
+          "latency": {
+            "count": 100000,
+            "p50_ns": 68920803327,
+            "p99_ns": 136163885055,
+            "p999_ns": 137438953471,
+            "max_ns": 137573171199
+          },
+          "schedule_lag": {
+            "count": 100000,
+            "p50_ns": 68484595711,
+            "p99_ns": 135761231871,
+            "p999_ns": 137036300287,
+            "max_ns": 137237626879
+          }
+        }
+      ],
+      "revocation": {
+        "placement": "second_machine",
+        "cap_ns": 30000000000,
+        "trials_requested": 30,
+        "trials": 30,
+        "capped": 0,
+        "staleness_ns": {
+          "count": 30,
+          "p50_ns": 387604,
+          "p99_ns": 1544192967,
+          "max_ns": 1544192967
+        },
+        "denied_by_ns": {
+          "count": 30,
+          "p50_ns": 903974,
+          "p99_ns": 1548269665,
+          "max_ns": 1548269665
+        },
+        "resolution_ns": {
+          "count": 30,
+          "p50_ns": 318161,
+          "p99_ns": 513835,
+          "max_ns": 513835
+        },
+        "write_ns": {
+          "count": 30,
+          "p50_ns": 2253737,
+          "p99_ns": 3148095,
+          "max_ns": 3148095
+        },
+        "samples": [
+          {
+            "staleness_ns": 1544192967,
+            "resolution_ns": 347440,
+            "denied_by_ns": 1548269665,
+            "write_ns": 3148095
+          },
+          {
+            "staleness_ns": 4899970,
+            "resolution_ns": 318161,
+            "denied_by_ns": 5182597,
+            "write_ns": 2558990
+          },
+          {
+            "staleness_ns": 2776567,
+            "resolution_ns": 314526,
+            "denied_by_ns": 3075044,
+            "write_ns": 2481917
+          },
+          {
+            "staleness_ns": 104,
+            "resolution_ns": 104,
+            "denied_by_ns": 298050,
+            "write_ns": 2374532
+          },
+          {
+            "staleness_ns": 2874606,
+            "resolution_ns": 319606,
+            "denied_by_ns": 3218460,
+            "write_ns": 2411974
+          },
+          {
+            "staleness_ns": 1554748,
+            "resolution_ns": 292252,
+            "denied_by_ns": 1831522,
+            "write_ns": 2456743
+          },
+          {
+            "staleness_ns": 2267251,
+            "resolution_ns": 332789,
+            "denied_by_ns": 2571586,
+            "write_ns": 2303950
+          },
+          {
+            "staleness_ns": 301285,
+            "resolution_ns": 301170,
+            "denied_by_ns": 604430,
+            "write_ns": 2253737
+          },
+          {
+            "staleness_ns": 135,
+            "resolution_ns": 135,
+            "denied_by_ns": 322315,
+            "write_ns": 2273519
+          },
+          {
+            "staleness_ns": 1613908,
+            "resolution_ns": 335656,
+            "denied_by_ns": 1929150,
+            "write_ns": 2255871
+          },
+          {
+            "staleness_ns": 343622,
+            "resolution_ns": 343483,
+            "denied_by_ns": 642994,
+            "write_ns": 2291109
+          },
+          {
+            "staleness_ns": 918464,
+            "resolution_ns": 313418,
+            "denied_by_ns": 4582692,
+            "write_ns": 2269541
+          },
+          {
+            "staleness_ns": 342596,
+            "resolution_ns": 342462,
+            "denied_by_ns": 661222,
+            "write_ns": 2234485
+          },
+          {
+            "staleness_ns": 698967,
+            "resolution_ns": 353605,
+            "denied_by_ns": 1054721,
+            "write_ns": 2191840
+          },
+          {
+            "staleness_ns": 358034,
+            "resolution_ns": 357904,
+            "denied_by_ns": 693938,
+            "write_ns": 2104184
+          },
+          {
+            "staleness_ns": 3396575,
+            "resolution_ns": 292793,
+            "denied_by_ns": 3713772,
+            "write_ns": 2285085
+          },
+          {
+            "staleness_ns": 309627,
+            "resolution_ns": 309446,
+            "denied_by_ns": 695047,
+            "write_ns": 2290346
+          },
+          {
+            "staleness_ns": 2641419,
+            "resolution_ns": 366426,
+            "denied_by_ns": 3035991,
+            "write_ns": 2263369
+          },
+          {
+            "staleness_ns": 1049453,
+            "resolution_ns": 384579,
+            "denied_by_ns": 1432322,
+            "write_ns": 2262218
+          },
+          {
+            "staleness_ns": 309704,
+            "resolution_ns": 309601,
+            "denied_by_ns": 629947,
+            "write_ns": 2179805
+          },
+          {
+            "staleness_ns": 126,
+            "resolution_ns": 126,
+            "denied_by_ns": 361462,
+            "write_ns": 2119491
+          },
+          {
+            "staleness_ns": 334056,
+            "resolution_ns": 333934,
+            "denied_by_ns": 651906,
+            "write_ns": 2247454
+          },
+          {
+            "staleness_ns": 93,
+            "resolution_ns": 93,
+            "denied_by_ns": 340189,
+            "write_ns": 2161931
+          },
+          {
+            "staleness_ns": 132,
+            "resolution_ns": 132,
+            "denied_by_ns": 374276,
+            "write_ns": 2122039
+          },
+          {
+            "staleness_ns": 1518506,
+            "resolution_ns": 381060,
+            "denied_by_ns": 1917854,
+            "write_ns": 2153131
+          },
+          {
+            "staleness_ns": 1552121,
+            "resolution_ns": 379086,
+            "denied_by_ns": 1928086,
+            "write_ns": 2238985
+          },
+          {
+            "staleness_ns": 387604,
+            "resolution_ns": 387507,
+            "denied_by_ns": 903974,
+            "write_ns": 2231984
+          },
+          {
+            "staleness_ns": 100,
+            "resolution_ns": 100,
+            "denied_by_ns": 499741,
+            "write_ns": 2084262
+          },
+          {
+            "staleness_ns": 2058404,
+            "resolution_ns": 513835,
+            "denied_by_ns": 2586820,
+            "write_ns": 2232617
+          },
+          {
+            "staleness_ns": 91,
+            "resolution_ns": 91,
+            "denied_by_ns": 500183,
+            "write_ns": 2172461
+          }
+        ]
+      }
+    }
+  ]
+}

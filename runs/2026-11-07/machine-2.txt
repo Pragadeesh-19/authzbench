@@ -1,0 +1,14 @@
+recorded_at: 2026-11-07T18:03:43Z
+instance_type: c5.2xlarge
+availability_zone: eu-north-1c
+private_ip: 172.31.5.47
+cpu: Intel(R) Xeon(R) Platinum 8124M CPU @ 3.00GHz
+vcpus: 8
+memory: 15Gi
+os: Ubuntu 26.04.1 LTS
+kernel: 7.0.0-1014-aws
+python: Python 3.12.12
+authzbench_commit: 2ac787c9556ecf1af71c5d86998adfe3b7c23538
+nodusdb: 0.1.1
+go: go version go1.26.8 linux/amd64
+authzbench_go_binary_sha256: ec1a37ec1b32c91de5a8970610e58951e522de71cb98a63f32df649c379db9cf
