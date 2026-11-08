@@ -12,6 +12,46 @@ It measures two things that matter when access is revoked:
 Every engine answers the same schema, generated from one model, over the same seeded dataset, and must agree with a
 reference evaluator before anything is timed. Every number in a results file can be reproduced from its seed.
 
+## Results
+
+The [run of 2026-11-07](runs/2026-11-07) measured NodusDB 0.1.1, SpiceDB v1.57.0 and OpenFGA v1.22.1 at three
+dataset sizes on two c5.2xlarge machines in AWS eu-north-1. Every engine agreed with the reference evaluator on every
+check before it was timed. At 560,497 relationships:
+
+| Engine and consistency mode | Check, p50 | Check, p99 | At 1,000 checks/s, p50 | A revoked permission still granted for, longest of 90 races |
+|---|---:|---:|---:|---|
+| NodusDB, in process | 9 µs | 17 µs | 12 µs | never |
+| NodusDB follower, with the write's token | 10 µs | 19 µs | 13 µs | never; a check right after the write waits about 140 ms |
+| NodusDB follower, without a token | 9 µs | 18 µs | 12 µs | 0.30 s |
+| OpenFGA `HIGHER_CONSISTENCY` | 3.6 ms | 22.7 ms | 6.6 s | never |
+| OpenFGA `MINIMIZE_LATENCY`, check cache on | 3.2 ms | 21.6 ms | 6.3 s | 10.0 s |
+| SpiceDB `at_least_as_fresh` | 4.3 ms | 16.2 ms | 5.6 s | never |
+| SpiceDB `fully_consistent` | 4.5 ms | 16.5 ms | 5.5 s | never |
+| SpiceDB `minimize_latency` | 4.3 ms | 15.5 ms | 5.4 s | 3.5 s |
+
+The services were driven from a second machine by Go with up to 256 checks in flight, and NodusDB by Python with one.
+At 1,000 checks a second SpiceDB and OpenFGA used 93 to 100% of the 8-vCPU machine they shared with their Postgres,
+so those columns measure a saturated machine. The [run's README](runs/2026-11-07) lists what to read with care, and
+its folders hold every raw results file, the CPU traces and the machine records.
+
+## Vendor contributions welcome
+
+AuthzBench was written by the author of NodusDB. That is a reason to check our work, and we would rather you did it
+in the open. If you maintain SpiceDB, OpenFGA or another Zanzibar-style engine, or run one in production, we want your
+changes:
+
+- Tuning. If a flag, a pool size, a cache or a deployment shape is how you would run your engine, change
+  [services/compose.yaml](services/compose.yaml) or the adapter and open a pull request. Say where the setting is
+  documented, or why it is right.
+- Consistency modes. If a mode is missing or misdescribed, the adapters in [go/engines](go/engines) are short.
+- A new engine. Add an adapter beside the others. It must pass the same conformance check against the reference
+  evaluator before it is timed.
+- Method. If the measurement itself is wrong, open an issue with the evidence.
+
+Every accepted change gets a row in [docs/decisions.md](docs/decisions.md) and a new run published as a new folder
+under [runs/](runs). A published number is never edited in place; a correction is a new run with a note saying what
+changed.
+
 ## Layout
 
 | Path | What it holds |
@@ -65,15 +105,18 @@ On machine 1, with S3 credentials in `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_
 
 ```sh
 BIND_ADDRESS=10.0.0.5 docker compose -f services/compose.yaml up --detach --wait spicedb openfga
-authzbench serve --engine nodus-writer --dataset data/S --listen 10.0.0.5:7700 --allow 10.0.0.6     --graph nodus-writer --signing-key keys/signing.pem --bucket my-bucket --region eu-north-1
+authzbench serve --engine nodus-writer --dataset data/S --listen 10.0.0.5:7700 --allow 10.0.0.6 \
+    --graph nodus-writer --signing-key keys/signing.pem --bucket my-bucket --region eu-north-1
 ```
 
 The writer makes `keys/signing.pem` when it is missing; copy `keys/signing.pub` to machine 2. On machine 2, with the
 same credentials:
 
 ```sh
-authzbench run --engine nodus-follower --placement second_machine --writer http://10.0.0.5:7700     --public-key signing.pub --bucket my-bucket --region eu-north-1 --dataset data/S --out results/follower-S.json
-./authzbench-go -engine spicedb -placement second_machine -spicedb-endpoint 10.0.0.5:50051     -dataset data/S -out results/spicedb-S-remote.json
+authzbench run --engine nodus-follower --placement second_machine --writer http://10.0.0.5:7700 \
+    --public-key signing.pub --bucket my-bucket --region eu-north-1 --dataset data/S --out results/follower-S.json
+./authzbench-go -engine spicedb -placement second_machine -spicedb-endpoint 10.0.0.5:50051 \
+    -dataset data/S -out results/spicedb-S-remote.json
 ```
 
 `authzbench serve --engine calibration` on machine 1 and `authzbench run --engine remote-calibration` on machine 2
