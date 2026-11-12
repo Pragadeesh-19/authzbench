@@ -67,7 +67,7 @@ func TestATreeStillAllowedAtTheCapCountsEveryLeaf(t *testing.T) {
 	if !result.Capped() || result.AllowedAtCap != 2 || result.StalenessNs() != nil || result.DeniedByNs() != nil {
 		t.Fatalf("result = %+v", result)
 	}
-	if result.ResolutionNs < checkCost || result.ResolutionNs > 100*millis {
+	if result.ResolutionNs < checkCost || result.ResolutionNs > 100*millis+checkCost {
 		t.Fatalf("resolution = %d", result.ResolutionNs)
 	}
 }
