@@ -8,10 +8,10 @@ from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
 
-from authzbench.measure import OpenLoopResult, RevocationResult, TrialSpread
+from authzbench.measure import DelegationResult, OpenLoopResult, RevocationResult, TrialSpread
 from authzbench.runner import ModeResult, RunResult
 
-FORMAT = "authzbench.results/2"
+FORMAT = "authzbench.results/3"
 
 
 def results_schema() -> dict:
@@ -59,6 +59,7 @@ def _mode(mode: ModeResult) -> dict:
         "service_time": asdict(mode.service_time),
         "open_loop": [_open_loop(result) for result in mode.open_loop],
         "revocation": _revocation(mode.revocations, mode.revocation_trials, mode.placement),
+        "delegation": _delegation(mode.delegations, mode.revocation_trials, mode.placement),
     }
 
 
@@ -85,6 +86,27 @@ def _revocation(trials: tuple[RevocationResult, ...], requested: int, placement:
         "write_ns": _spread([trial.write_ns for trial in trials]),
         "samples": [{"staleness_ns": trial.staleness_ns, "resolution_ns": trial.resolution_ns,
                      "denied_by_ns": trial.denied_by_ns, "write_ns": trial.write_ns} for trial in trials],
+    }
+
+
+def _delegation(trials: tuple[DelegationResult, ...], requested: int, placement: str) -> dict:
+    seen = [trial for trial in trials if not trial.capped]
+    return {
+        "placement": placement,
+        "cap_ns": trials[0].cap_ns,
+        "trials_requested": requested,
+        "trials": len(trials),
+        "capped": len(trials) - len(seen),
+        "staleness_ns": _spread([trial.staleness_ns for trial in seen]),
+        "denied_by_ns": _spread([trial.denied_by_ns for trial in seen]),
+        "resolution_ns": _spread([trial.resolution_ns for trial in trials]),
+        "write_ns": _spread([trial.write_ns for trial in trials]),
+        "samples": [{"staleness_ns": trial.staleness_ns, "resolution_ns": trial.resolution_ns,
+                     "denied_by_ns": trial.denied_by_ns, "write_ns": trial.write_ns,
+                     "allowed_at_cap": trial.allowed_at_cap,
+                     "leaf_staleness_ns": None if trial.capped else list(trial.leaf_staleness_ns),
+                     "leaf_denied_by_ns": None if trial.capped else list(trial.leaf_denied_by_ns)}
+                    for trial in trials],
     }
 
 

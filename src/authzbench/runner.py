@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from authzbench.dataset import Dataset
 from authzbench.engine import Checker, Consistency, Engine
 from authzbench.engines.noop import NoopChecker
-from authzbench.measure import OpenLoopResult, RevocationResult, open_loop, race_revocations, service_time
+from authzbench.measure import (DelegationResult, OpenLoopResult, RevocationResult, open_loop, race_delegations,
+                                race_revocations, service_time)
 from authzbench.relationships import Expectation
 from authzbench.timing import NANOS_PER_SECOND, LatencySummary
 
@@ -43,6 +44,7 @@ class ModeResult:
     service_time: LatencySummary
     open_loop: tuple[OpenLoopResult, ...]
     revocations: tuple[RevocationResult, ...]
+    delegations: tuple[DelegationResult, ...]
     revocation_trials: int
     placement: str
 
@@ -57,8 +59,14 @@ class RunResult:
     modes: tuple[ModeResult, ...]
 
 
+def conformance_expectations(dataset: Dataset) -> tuple[Expectation, ...]:
+    delegation = dataset.delegation
+    granted = (*delegation.probes, delegation.kept)
+    return (*dataset.expectations, dataset.nesting, *(Expectation(query, True) for query in granted))
+
+
 def verify_conformance(checker: Checker, dataset: Dataset) -> int:
-    expectations = (*dataset.expectations, dataset.nesting)
+    expectations = conformance_expectations(dataset)
     mismatches = [expectation for expectation in expectations
                   if checker.check(expectation.query, Consistency.FRESH) is not expectation.allowed]
     if mismatches:
@@ -80,6 +88,8 @@ def run(engine: Engine, dataset: Dataset, plan: RunPlan) -> RunResult:
             open_loop=tuple(open_loop(engine, queries, consistency, rate, plan.open_loop_ns)
                             for rate in plan.open_loop_rates),
             revocations=race_revocations(engine, engine, dataset.revocation, consistency, plan.revocation_cap_ns,
+                                         plan.revocation_trials),
+            delegations=race_delegations(engine, engine, dataset.delegation, consistency, plan.revocation_cap_ns,
                                          plan.revocation_trials),
             revocation_trials=plan.revocation_trials,
             placement=plan.placement,

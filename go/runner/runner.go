@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Pragadeesh-19/authzbench/go/dataset"
@@ -27,6 +28,7 @@ type ModeResult struct {
 	ServiceTime      timing.Summary
 	OpenLoop         []measure.OpenLoopResult
 	Revocations      []measure.RevocationResult
+	Delegations      []measure.DelegationResult
 	RevocationTrials int
 	Placement        string
 }
@@ -53,9 +55,20 @@ func (e *ConformanceError) Error() string {
 		len(e.Mismatches), strings.Join(shown, "; "))
 }
 
-func VerifyConformance(ctx context.Context, checker engine.Checker, data *dataset.Dataset) (int, error) {
-	expectations := make([]dataset.Expectation, 0, len(data.Expectations)+1)
+// ConformanceExpectations are the dataset's checks, the nesting check, and every delegation leaf and the person
+// allowed before any revoke.
+func ConformanceExpectations(data *dataset.Dataset) []dataset.Expectation {
+	delegation := data.Delegation
+	expectations := make([]dataset.Expectation, 0, len(data.Expectations)+len(delegation.Probes)+2)
 	expectations = append(append(expectations, data.Expectations...), data.Nesting)
+	for _, query := range append(slices.Clone(delegation.Probes), delegation.Kept()) {
+		expectations = append(expectations, dataset.Expectation{Query: query, Allowed: true})
+	}
+	return expectations
+}
+
+func VerifyConformance(ctx context.Context, checker engine.Checker, data *dataset.Dataset) (int, error) {
+	expectations := ConformanceExpectations(data)
 	var mismatches []dataset.Expectation
 	for _, expectation := range expectations {
 		allowed, err := checker.Check(ctx, expectation.Query, engine.Fresh, nil)
@@ -115,8 +128,13 @@ func measureMode(ctx context.Context, target engine.Engine, data *dataset.Datase
 	if err != nil {
 		return ModeResult{}, err
 	}
+	delegations, err := measure.RaceDelegations(ctx, target, target, data.Delegation, mode.Consistency,
+		plan.RevocationCapNs, plan.RevocationTrials, clock)
+	if err != nil {
+		return ModeResult{}, err
+	}
 	return ModeResult{Mode: mode, ServiceTime: serviceTime, OpenLoop: openLoop, Revocations: revocations,
-		RevocationTrials: plan.RevocationTrials, Placement: plan.Placement}, nil
+		Delegations: delegations, RevocationTrials: plan.RevocationTrials, Placement: plan.Placement}, nil
 }
 
 func openLoops(ctx context.Context, checker engine.Checker, queries []dataset.Query, consistency engine.Consistency,

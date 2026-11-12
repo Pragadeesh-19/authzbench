@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Format            = "authzbench.dataset/1"
+	Format            = "authzbench.dataset/2"
 	manifestFile      = "dataset.json"
 	relationshipsFile = "relationships.txt"
 	checksFile        = "checks.txt"
@@ -20,6 +20,19 @@ type Revocation struct {
 	Probe  Query
 }
 
+// Delegation is a person who delegates to one agent, which delegates down a tree; revoking the person's delegation
+// must deny every leaf agent in Probes while the person keeps their own access.
+type Delegation struct {
+	Person Object
+	Revoke Relationship
+	Probes []Query
+}
+
+// Kept is the person's own check, allowed before and after the revoke.
+func (d Delegation) Kept() Query {
+	return Query{Resource: d.Probes[0].Resource, Permission: d.Probes[0].Permission, Subject: d.Person}
+}
+
 type Dataset struct {
 	Model         string
 	Scale         string
@@ -28,6 +41,7 @@ type Dataset struct {
 	Expectations  []Expectation
 	Revocation    Revocation
 	Nesting       Expectation
+	Delegation    Delegation
 }
 
 type manifest struct {
@@ -41,7 +55,12 @@ type manifest struct {
 		Revoke string `json:"revoke"`
 		Probe  string `json:"probe"`
 	} `json:"revocation"`
-	Nesting string `json:"nesting"`
+	Nesting    string `json:"nesting"`
+	Delegation struct {
+		Person string   `json:"person"`
+		Revoke string   `json:"revoke"`
+		Probes []string `json:"probes"`
+	} `json:"delegation"`
 }
 
 func Read(directory string) (*Dataset, error) {
@@ -94,6 +113,10 @@ func assemble(described manifest, relationships []Relationship, expectations []E
 	if err != nil {
 		return nil, err
 	}
+	delegation, err := readDelegation(described)
+	if err != nil {
+		return nil, err
+	}
 	return &Dataset{
 		Model:         described.Model,
 		Scale:         described.Scale,
@@ -102,7 +125,30 @@ func assemble(described manifest, relationships []Relationship, expectations []E
 		Expectations:  expectations,
 		Revocation:    Revocation{Revoke: revoke, Probe: probe},
 		Nesting:       nesting,
+		Delegation:    delegation,
 	}, nil
+}
+
+func readDelegation(described manifest) (Delegation, error) {
+	section := described.Delegation
+	person, err := ParseObject(section.Person)
+	if err != nil {
+		return Delegation{}, err
+	}
+	revoke, err := ParseRelationship(section.Revoke)
+	if err != nil {
+		return Delegation{}, err
+	}
+	if len(section.Probes) == 0 {
+		return Delegation{}, fmt.Errorf("the delegation scenario names no leaf to probe")
+	}
+	probes := make([]Query, len(section.Probes))
+	for index, text := range section.Probes {
+		if probes[index], err = ParseQuery(text); err != nil {
+			return Delegation{}, err
+		}
+	}
+	return Delegation{Person: person, Revoke: revoke, Probes: probes}, nil
 }
 
 func readLines[T any](path string, parse func(string) (T, error)) ([]T, error) {

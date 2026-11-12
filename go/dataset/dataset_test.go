@@ -48,7 +48,7 @@ func TestADatasetIsReadWithItsScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(data.Relationships) != 5 || len(data.Expectations) != 2 {
+	if len(data.Relationships) != 14 || len(data.Expectations) != 2 {
 		t.Fatalf("read %d relationships and %d checks", len(data.Relationships), len(data.Expectations))
 	}
 	if data.Revocation.Revoke.String() != "group:revocation-team#member@user:revocation-target" {
@@ -59,6 +59,25 @@ func TestADatasetIsReadWithItsScenarios(t *testing.T) {
 	}
 	if !data.Nesting.Allowed || data.Model != "document-sharing" || data.Seed != 1 {
 		t.Errorf("manifest fields: %+v", data)
+	}
+	delegation := data.Delegation
+	if delegation.Revoke.String() != "group:delegation-person#member@group:delegation-agent#member" ||
+		len(delegation.Probes) != 2 || delegation.Probes[1].String() != "document:delegation-target#view@user:delegation-agent-1" {
+		t.Errorf("delegation = %+v", delegation)
+	}
+	if delegation.Kept().String() != "document:delegation-target#view@user:delegation-person" {
+		t.Errorf("kept = %s", delegation.Kept())
+	}
+}
+
+func TestAnObjectParsesAndAMalformedOneIsRefused(t *testing.T) {
+	if parsed, err := ParseObject("user:delegation-agent-0"); err != nil || parsed != (Object{Type: "user", ID: "delegation-agent-0"}) {
+		t.Fatalf("parsed = %+v, err = %v", parsed, err)
+	}
+	for _, text := range []string{"user", "user:", ":id", "user:a#member", "User:a"} {
+		if _, err := ParseObject(text); err == nil {
+			t.Errorf("object %q was accepted", text)
+		}
 	}
 }
 

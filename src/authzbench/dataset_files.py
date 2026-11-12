@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 
 from authzbench.benchmark_model import MODELS
-from authzbench.dataset import Dataset, DatasetError, RevocationScenario, scale_named
-from authzbench.relationships import CheckQuery, Expectation, Relationship
+from authzbench.dataset import (Dataset, DatasetError, Delegation, DelegationScenario, RevocationScenario,
+                               scale_named)
+from authzbench.relationships import CheckQuery, Expectation, ObjectRef, Relationship
 
-FORMAT = "authzbench.dataset/1"
+FORMAT = "authzbench.dataset/2"
 MANIFEST = "dataset.json"
 RELATIONSHIPS = "relationships.txt"
 CHECKS = "checks.txt"
@@ -26,6 +27,12 @@ def write_dataset(dataset: Dataset, directory: Path) -> None:
         "checks": len(dataset.expectations),
         "revocation": {"revoke": str(dataset.revocation.revoke), "probe": str(dataset.revocation.probe)},
         "nesting": str(dataset.nesting),
+        "delegation": {
+            "person": str(dataset.delegation.person),
+            "revoke": str(dataset.delegation.revoke),
+            "probes": [str(probe) for probe in dataset.delegation.probes],
+            "delegations": [str(delegation) for delegation in dataset.delegation.delegations],
+        },
     }
     (directory / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
@@ -46,7 +53,24 @@ def read_dataset(directory: Path) -> Dataset:
     if model_name not in MODELS:
         raise DatasetError(f"unknown model {model_name!r}")
     return Dataset(model_name, MODELS[model_name], scale_named(manifest["scale"]), manifest["seed"], relationships,
-                   expectations, revocation, Expectation.parse(manifest["nesting"]))
+                   expectations, revocation, Expectation.parse(manifest["nesting"]),
+                   _delegation(manifest["delegation"]))
+
+
+def _delegation(section: dict) -> DelegationScenario:
+    return DelegationScenario(
+        _object(section["person"]),
+        Relationship.parse(section["revoke"]),
+        tuple(map(CheckQuery.parse, section["probes"])),
+        tuple(Delegation(*map(_object, pair.split(" "))) for pair in section["delegations"]),
+    )
+
+
+def _object(text: str) -> ObjectRef:
+    kind, _, identifier = text.partition(":")
+    if not kind or not identifier:
+        raise DatasetError(f"not an object: {text!r}")
+    return ObjectRef(kind, identifier)
 
 
 def _write_lines(path: Path, lines) -> None:

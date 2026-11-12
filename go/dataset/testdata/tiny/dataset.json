@@ -1,13 +1,26 @@
 {
-  "format": "authzbench.dataset/1",
+  "format": "authzbench.dataset/2",
   "model": "document-sharing",
   "scale": "S",
   "seed": 1,
-  "relationships": 5,
+  "relationships": 14,
   "checks": 2,
   "revocation": {
     "revoke": "group:revocation-team#member@user:revocation-target",
     "probe": "document:revocation-target#view@user:revocation-target"
   },
-  "nesting": "document:nesting-target#view@user:nesting-leaf allow"
+  "nesting": "document:nesting-target#view@user:nesting-leaf allow",
+  "delegation": {
+    "person": "user:delegation-person",
+    "revoke": "group:delegation-person#member@group:delegation-agent#member",
+    "probes": [
+      "document:delegation-target#view@user:delegation-agent-0",
+      "document:delegation-target#view@user:delegation-agent-1"
+    ],
+    "delegations": [
+      "user:delegation-person user:delegation-agent",
+      "user:delegation-agent user:delegation-agent-0",
+      "user:delegation-agent user:delegation-agent-1"
+    ]
+  }
 }

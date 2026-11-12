@@ -2,9 +2,11 @@ package measure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
+	"sync"
 
 	"github.com/Pragadeesh-19/authzbench/go/dataset"
 	"github.com/Pragadeesh-19/authzbench/go/engine"
@@ -27,6 +29,32 @@ type RevocationResult struct {
 }
 
 func (r RevocationResult) Capped() bool { return r.StalenessNs == nil }
+
+// DelegationResult is one delegation race: per leaf, the time from the revoke's acknowledgement to the start of its
+// first denying check, and to that check's return. Capped when some leaf was still allowed at the cap; AllowedAtCap
+// says how many.
+type DelegationResult struct {
+	LeafStalenessNs []int64
+	LeafDeniedByNs  []int64
+	ResolutionNs    int64
+	WriteNs         int64
+	CapNs           int64
+	AllowedAtCap    int
+}
+
+func (r DelegationResult) Capped() bool { return r.LeafStalenessNs == nil }
+
+func (r DelegationResult) StalenessNs() *int64 { return maxOf(r.LeafStalenessNs) }
+
+func (r DelegationResult) DeniedByNs() *int64 { return maxOf(r.LeafDeniedByNs) }
+
+func maxOf(values []int64) *int64 {
+	if values == nil {
+		return nil
+	}
+	largest := slices.Max(values)
+	return &largest
+}
 
 type TrialSpread struct {
 	Count int   `json:"count"`
@@ -53,12 +81,26 @@ func nearestRank(ordered []int64, quantile float64) int64 {
 // than "> cap" and its restore may take as long to appear.
 func RaceRevocations(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Revocation,
 	consistency engine.Consistency, capNs int64, trials int, clock timing.Clock) ([]RevocationResult, error) {
+	return repeat(trials, func() (RevocationResult, error) {
+		return RaceRevocation(ctx, writer, checker, scenario, consistency, capNs, clock)
+	})
+}
+
+// RaceDelegations runs the delegation race up to trials times; a capped trial ends the run, as for revocations.
+func RaceDelegations(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Delegation,
+	consistency engine.Consistency, capNs int64, trials int, clock timing.Clock) ([]DelegationResult, error) {
+	return repeat(trials, func() (DelegationResult, error) {
+		return RaceDelegation(ctx, writer, checker, scenario, consistency, capNs, clock)
+	})
+}
+
+func repeat[T interface{ Capped() bool }](trials int, race func() (T, error)) ([]T, error) {
 	if trials < 1 {
 		return nil, fmt.Errorf("a revocation needs at least one trial, not %d", trials)
 	}
-	results := make([]RevocationResult, 0, trials)
+	results := make([]T, 0, trials)
 	for range trials {
-		result, err := RaceRevocation(ctx, writer, checker, scenario, consistency, capNs, clock)
+		result, err := race()
 		if err != nil {
 			return results, err
 		}
@@ -160,6 +202,69 @@ func RaceRevocation(ctx context.Context, writer engine.Writer, checker engine.Ch
 		WriteNs: acknowledged - issued,
 		CapNs:   capNs,
 	}, acknowledged, clock)
+}
+
+// RaceDelegation revokes the person's delegation and times, for every leaf agent below it, the first check that
+// denies. Each leaf is checked by its own goroutine, as each agent checks for itself, so a leaf's staleness is not
+// charged the checks of the leaves before it. The race starts once every leaf is allowed, waiting at most the cap in
+// all; the resolution is that of the last leaf to be denied.
+func RaceDelegation(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Delegation,
+	consistency engine.Consistency, capNs int64, clock timing.Clock) (result DelegationResult, err error) {
+	deadline := clock.Now() + capNs
+	for _, probe := range scenario.Probes {
+		if err := awaitGrant(ctx, checker, probe, consistency, deadline-clock.Now(), clock); err != nil {
+			return result, err
+		}
+	}
+	issued := clock.Now()
+	revision, err := writer.Write(ctx, engine.Change{Operation: engine.Remove, Relationship: scenario.Revoke})
+	if err != nil {
+		return result, err
+	}
+	acknowledged := clock.Now()
+	defer func() {
+		if _, restoreErr := writer.Write(ctx, engine.Change{Operation: engine.Add, Relationship: scenario.Revoke}); err == nil {
+			err = restoreErr
+		}
+	}()
+	leaves := make([]RevocationResult, len(scenario.Probes))
+	failures := make([]error, len(scenario.Probes))
+	var group sync.WaitGroup
+	for index, probe := range scenario.Probes {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			leaves[index], failures[index] = awaitDenial(ctx, checker, probe, consistency, revision,
+				RevocationResult{CapNs: capNs}, acknowledged, clock)
+		}()
+	}
+	group.Wait()
+	if err := errors.Join(failures...); err != nil {
+		return result, err
+	}
+	return summarizeLeaves(leaves, acknowledged-issued, capNs), nil
+}
+
+func summarizeLeaves(leaves []RevocationResult, writeNs, capNs int64) DelegationResult {
+	result := DelegationResult{WriteNs: writeNs, CapNs: capNs}
+	staleness, deniedBy := make([]int64, len(leaves)), make([]int64, len(leaves))
+	last := 0
+	for index, leaf := range leaves {
+		if leaf.Capped() {
+			result.AllowedAtCap++
+			result.ResolutionNs = max(result.ResolutionNs, leaf.ResolutionNs)
+			continue
+		}
+		staleness[index], deniedBy[index] = *leaf.StalenessNs, *leaf.DeniedByNs
+		if staleness[index] > staleness[last] {
+			last = index
+		}
+	}
+	if result.AllowedAtCap > 0 {
+		return result
+	}
+	result.LeafStalenessNs, result.LeafDeniedByNs, result.ResolutionNs = staleness, deniedBy, leaves[last].ResolutionNs
+	return result
 }
 
 func awaitGrant(ctx context.Context, checker engine.Checker, probe dataset.Query, consistency engine.Consistency,

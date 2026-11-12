@@ -5,7 +5,7 @@
   "additionalProperties": false,
   "required": ["format", "engine", "dataset", "environment", "conformance", "driver_baseline", "modes"],
   "properties": {
-    "format": {"const": "authzbench.results/2"},
+    "format": {"const": "authzbench.results/3"},
     "engine": {
       "type": "object",
       "additionalProperties": false,
@@ -103,7 +103,7 @@
     "mode": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["consistency", "mode", "service_time", "open_loop", "revocation"],
+      "required": ["consistency", "mode", "service_time", "open_loop", "revocation", "delegation"],
       "properties": {
         "consistency": {"enum": ["fresh", "fastest"]},
         "mode": {"type": "string", "minLength": 1},
@@ -129,7 +129,43 @@
             "write_ns": {"$ref": "#/$defs/spread"},
             "samples": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/trial"}}
           }
+        },
+        "delegation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["placement", "cap_ns", "trials_requested", "trials", "capped", "staleness_ns", "denied_by_ns",
+                       "resolution_ns", "write_ns", "samples"],
+          "properties": {
+            "placement": {"enum": ["in_process", "same_machine", "second_machine"]},
+            "cap_ns": {"type": "integer", "minimum": 1},
+            "trials_requested": {"type": "integer", "minimum": 1},
+            "trials": {"type": "integer", "minimum": 1},
+            "capped": {"type": "integer", "minimum": 0},
+            "staleness_ns": {"oneOf": [{"$ref": "#/$defs/spread"}, {"type": "null"}]},
+            "denied_by_ns": {"oneOf": [{"$ref": "#/$defs/spread"}, {"type": "null"}]},
+            "resolution_ns": {"$ref": "#/$defs/spread"},
+            "write_ns": {"$ref": "#/$defs/spread"},
+            "samples": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/delegation_trial"}}
+          }
         }
+      }
+    },
+    "leaves": {
+      "oneOf": [{"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/nanoseconds"}}, {"type": "null"}]
+    },
+    "delegation_trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["staleness_ns", "resolution_ns", "denied_by_ns", "write_ns", "allowed_at_cap", "leaf_staleness_ns",
+                   "leaf_denied_by_ns"],
+      "properties": {
+        "staleness_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
+        "resolution_ns": {"$ref": "#/$defs/nanoseconds"},
+        "denied_by_ns": {"oneOf": [{"$ref": "#/$defs/nanoseconds"}, {"type": "null"}]},
+        "write_ns": {"$ref": "#/$defs/nanoseconds"},
+        "allowed_at_cap": {"type": "integer", "minimum": 0},
+        "leaf_staleness_ns": {"$ref": "#/$defs/leaves"},
+        "leaf_denied_by_ns": {"$ref": "#/$defs/leaves"}
       }
     }
   }

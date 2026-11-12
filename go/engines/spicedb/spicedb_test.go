@@ -28,6 +28,14 @@ func TestSpiceDBAgreesWithTheReferenceAndSeesItsOwnRevokeAtLeastAsFreshAsItsToke
 	enginetest.AgreesWithTheReferenceAndSeesItsOwnRevokeWhenFresh(t, dial(t, spicedb.AtLeastAsFresh))
 }
 
+func TestSpiceDBDeniesEveryDelegatedLeafOnItsFirstFreshCheck(t *testing.T) {
+	for _, freshRead := range spicedb.FreshReads {
+		t.Run(string(freshRead), func(t *testing.T) {
+			enginetest.DeniesEveryDelegatedLeafOnItsFirstFreshCheck(t, dial(t, freshRead))
+		})
+	}
+}
+
 func TestSpiceDBSeesItsOwnWritesWhenFresh(t *testing.T) {
 	for _, freshRead := range spicedb.FreshReads {
 		t.Run(string(freshRead), func(t *testing.T) {

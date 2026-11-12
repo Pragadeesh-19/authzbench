@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from authzbench.model import Model
-from authzbench.relationships import CheckQuery, Expectation, Relationship
+from authzbench.relationships import CheckQuery, Expectation, ObjectRef, Relationship
 
 
 class DatasetError(ValueError):
@@ -44,6 +44,30 @@ class RevocationScenario:
 
 
 @dataclass(frozen=True)
+class Delegation:
+    delegator: ObjectRef
+    delegate: ObjectRef
+
+    def __str__(self) -> str:
+        return f"{self.delegator} {self.delegate}"
+
+
+@dataclass(frozen=True)
+class DelegationScenario:
+    """A person delegates to one agent, which delegates down a tree; revoking the person's delegation must deny every
+    leaf agent while the person keeps their own access."""
+
+    person: ObjectRef
+    revoke: Relationship
+    probes: tuple[CheckQuery, ...]
+    delegations: tuple[Delegation, ...]
+
+    @property
+    def kept(self) -> CheckQuery:
+        return CheckQuery(self.probes[0].resource, self.probes[0].permission, self.person)
+
+
+@dataclass(frozen=True)
 class Dataset:
     model_name: str
     model: Model
@@ -53,3 +77,4 @@ class Dataset:
     expectations: tuple[Expectation, ...]
     revocation: RevocationScenario
     nesting: Expectation
+    delegation: DelegationScenario

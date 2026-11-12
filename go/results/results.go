@@ -13,7 +13,7 @@ import (
 	"github.com/Pragadeesh-19/authzbench/go/timing"
 )
 
-const Format = "authzbench.results/2"
+const Format = "authzbench.results/3"
 
 type Document struct {
 	Format         string                   `json:"format"`
@@ -56,6 +56,7 @@ type Mode struct {
 	ServiceTime timing.Summary           `json:"service_time"`
 	OpenLoop    []measure.OpenLoopResult `json:"open_loop"`
 	Revocation  Revocation               `json:"revocation"`
+	Delegation  Delegation               `json:"delegation"`
 }
 
 type Revocation struct {
@@ -69,6 +70,29 @@ type Revocation struct {
 	ResolutionNs    *measure.TrialSpread `json:"resolution_ns"`
 	WriteNs         *measure.TrialSpread `json:"write_ns"`
 	Samples         []Trial              `json:"samples"`
+}
+
+type Delegation struct {
+	Placement       string               `json:"placement"`
+	CapNs           int64                `json:"cap_ns"`
+	TrialsRequested int                  `json:"trials_requested"`
+	Trials          int                  `json:"trials"`
+	Capped          int                  `json:"capped"`
+	StalenessNs     *measure.TrialSpread `json:"staleness_ns"`
+	DeniedByNs      *measure.TrialSpread `json:"denied_by_ns"`
+	ResolutionNs    *measure.TrialSpread `json:"resolution_ns"`
+	WriteNs         *measure.TrialSpread `json:"write_ns"`
+	Samples         []DelegationTrial    `json:"samples"`
+}
+
+type DelegationTrial struct {
+	StalenessNs     *int64  `json:"staleness_ns"`
+	ResolutionNs    int64   `json:"resolution_ns"`
+	DeniedByNs      *int64  `json:"denied_by_ns"`
+	WriteNs         int64   `json:"write_ns"`
+	AllowedAtCap    int     `json:"allowed_at_cap"`
+	LeafStalenessNs []int64 `json:"leaf_staleness_ns"`
+	LeafDeniedByNs  []int64 `json:"leaf_denied_by_ns"`
 }
 
 type Trial struct {
@@ -103,6 +127,7 @@ func FromRun(result runner.RunResult, environment Environment) Document {
 			ServiceTime: mode.ServiceTime,
 			OpenLoop:    mode.OpenLoop,
 			Revocation:  revocation(mode),
+			Delegation:  delegation(mode),
 		})
 	}
 	return document
@@ -122,6 +147,27 @@ func revocation(mode runner.ModeResult) Revocation {
 			continue
 		}
 		staleness, deniedBy = append(staleness, *trial.StalenessNs), append(deniedBy, *trial.DeniedByNs)
+	}
+	summary.StalenessNs, summary.DeniedByNs = measure.SpreadOf(staleness), measure.SpreadOf(deniedBy)
+	summary.ResolutionNs, summary.WriteNs = measure.SpreadOf(resolution), measure.SpreadOf(write)
+	return summary
+}
+
+func delegation(mode runner.ModeResult) Delegation {
+	trials := mode.Delegations
+	summary := Delegation{Placement: mode.Placement, CapNs: trials[0].CapNs, TrialsRequested: mode.RevocationTrials,
+		Trials: len(trials)}
+	var staleness, deniedBy, resolution, write []int64
+	for _, trial := range trials {
+		summary.Samples = append(summary.Samples, DelegationTrial{StalenessNs: trial.StalenessNs(),
+			ResolutionNs: trial.ResolutionNs, DeniedByNs: trial.DeniedByNs(), WriteNs: trial.WriteNs,
+			AllowedAtCap: trial.AllowedAtCap, LeafStalenessNs: trial.LeafStalenessNs, LeafDeniedByNs: trial.LeafDeniedByNs})
+		resolution, write = append(resolution, trial.ResolutionNs), append(write, trial.WriteNs)
+		if trial.Capped() {
+			summary.Capped++
+			continue
+		}
+		staleness, deniedBy = append(staleness, *trial.StalenessNs()), append(deniedBy, *trial.DeniedByNs())
 	}
 	summary.StalenessNs, summary.DeniedByNs = measure.SpreadOf(staleness), measure.SpreadOf(deniedBy)
 	summary.ResolutionNs, summary.WriteNs = measure.SpreadOf(resolution), measure.SpreadOf(write)

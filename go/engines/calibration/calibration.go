@@ -3,6 +3,8 @@ package calibration
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/Pragadeesh-19/authzbench/go/dataset"
@@ -22,8 +24,8 @@ type pendingChange struct {
 	change    engine.Change
 }
 
-// Engine answers from a dataset's expected answers; the revocation probe is allowed exactly while the revoke
-// relationship is visible. Writes reach fastest-mode checks after Profile.StalenessNs, every check takes at least
+// Engine answers from a dataset's expected answers; the revocation probe is allowed exactly while its revoke
+// relationship is visible, every delegation leaf exactly while the person's delegation is, and the person always. Writes reach fastest-mode checks after Profile.StalenessNs, every check takes at least
 // Profile.ExtraLatencyNs, and the engine stops answering for StallDurationNs once every StallPeriodNs. Checks may run
 // concurrently; each spends its latency outside the lock.
 type Engine struct {
@@ -31,9 +33,9 @@ type Engine struct {
 	clock    timing.Clock
 	started  int64
 	answers  map[dataset.Query]bool
-	scenario dataset.Revocation
+	revokes  map[dataset.Query]dataset.Relationship
 	state    sync.Mutex
-	revoked  bool
+	revoked  map[dataset.Relationship]bool
 	pending  []pendingChange
 	revision int64
 }
@@ -55,13 +57,18 @@ func (e *Engine) Load(_ context.Context, data *dataset.Dataset) error {
 		e.answers[expectation.Query] = expectation.Allowed
 	}
 	e.answers[data.Nesting.Query] = data.Nesting.Allowed
-	e.scenario = data.Revocation
+	e.answers[data.Delegation.Kept()] = true
+	e.revokes = map[dataset.Query]dataset.Relationship{data.Revocation.Probe: data.Revocation.Revoke}
+	for _, probe := range data.Delegation.Probes {
+		e.revokes[probe] = data.Delegation.Revoke
+	}
+	e.revoked = map[dataset.Relationship]bool{}
 	return nil
 }
 
 func (e *Engine) Write(_ context.Context, change engine.Change) (engine.Revision, error) {
-	if change.Relationship != e.scenario.Revoke {
-		return nil, fmt.Errorf("the calibration engine only writes %s", e.scenario.Revoke)
+	if !slices.Contains(slices.Collect(maps.Values(e.revokes)), change.Relationship) {
+		return nil, fmt.Errorf("the calibration engine only writes its scenarios' revokes, not %s", change.Relationship)
 	}
 	e.state.Lock()
 	defer e.state.Unlock()
@@ -94,8 +101,8 @@ func (e *Engine) answer(query dataset.Query, consistency engine.Consistency) (bo
 		now := e.clock.Now()
 		e.applyPending(func(next pendingChange) bool { return next.visibleAt <= now })
 	}
-	if query == e.scenario.Probe {
-		return !e.revoked, nil
+	if revoke, probed := e.revokes[query]; probed {
+		return !e.revoked[revoke], nil
 	}
 	allowed, known := e.answers[query]
 	if !known {
@@ -116,7 +123,8 @@ func (e *Engine) waitOutStall(now int64) {
 
 func (e *Engine) applyPending(visible func(pendingChange) bool) {
 	for len(e.pending) > 0 && visible(e.pending[0]) {
-		e.revoked = e.pending[0].change.Operation == engine.Remove
+		change := e.pending[0].change
+		e.revoked[change.Relationship] = change.Operation == engine.Remove
 		e.pending = e.pending[1:]
 	}
 }

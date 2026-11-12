@@ -8,7 +8,7 @@ from authzbench.engine import Consistency
 from authzbench.engines.calibration import CalibrationEngine, CalibrationProfile
 from authzbench.generator import generate
 from authzbench.model import Computed, Definition, Model, Permission
-from authzbench.runner import ConformanceError, verify_conformance
+from authzbench.runner import ConformanceError, conformance_expectations, verify_conformance
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +32,8 @@ def test_nodus_agrees_with_the_reference_on_every_check(dataset):
     engine = NodusEngine.in_memory()
     try:
         engine.load(dataset)
-        assert verify_conformance(engine, dataset) == len(dataset.expectations) + 1
+        assert verify_conformance(engine, dataset) == len(dataset.expectations) + 1 + 28
+        assert len(conformance_expectations(dataset)) == len(dataset.expectations) + 1 + 28
         assert engine.check(dataset.revocation.probe, Consistency.FRESH)
     finally:
         engine.close()

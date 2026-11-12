@@ -114,3 +114,30 @@ func SeesItsOwnWritesWhenFreshWithoutTheirRevisions(t *testing.T, target engine.
 		}
 	}
 }
+
+func DeniesEveryDelegatedLeafOnItsFirstFreshCheck(t *testing.T, target engine.Engine) {
+	t.Helper()
+	ctx, data := context.Background(), Tiny(t)
+	if err := target.Load(ctx, data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.VerifyConformance(ctx, target, data); err != nil {
+		t.Fatal(err)
+	}
+	result, err := measure.RaceDelegation(ctx, target, target, data.Delegation, engine.Fresh, revocationCapNs,
+		timing.NewSystemClock())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Capped() {
+		t.Fatalf("%d leaves were still allowed at the cap", result.AllowedAtCap)
+	}
+	if *result.StalenessNs() != result.ResolutionNs {
+		t.Fatalf("the last leaf's first check after the revoke allowed: staleness = %d, resolution = %d",
+			*result.StalenessNs(), result.ResolutionNs)
+	}
+	allowed, err := target.Check(ctx, data.Delegation.Kept(), engine.Fresh, nil)
+	if err != nil || !allowed {
+		t.Fatalf("the person lost their own access after the race: %v, %v", allowed, err)
+	}
+}

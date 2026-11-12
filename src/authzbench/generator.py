@@ -5,13 +5,16 @@ import random
 from collections.abc import Callable
 
 from authzbench.benchmark_model import DOCUMENT_SHARING, DOCUMENT_SHARING_NAME
-from authzbench.dataset import Dataset, DatasetError, RevocationScenario, Scale
+from authzbench.dataset import (Dataset, DatasetError, Delegation, DelegationScenario, RevocationScenario,
+                               Scale)
 from authzbench.reference import ReferenceEvaluator, RelationshipStore
 from authzbench.relationships import CheckQuery, Expectation, ObjectRef, Relationship, SubjectRef
 
 MAX_GROUP_NESTING = 6
 MAX_FOLDER_DEPTH = 8
 NESTING_CHAIN_DEPTH = 16
+DELEGATION_DEPTH = 4
+DELEGATION_FANOUT = 3
 
 _NESTED_GROUP_SHARE = 0.3
 _SHARED_FOLDER_SHARE = 0.5
@@ -34,6 +37,14 @@ def verify_scenarios(dataset: Dataset) -> None:
     _verify(evaluator, Expectation(dataset.revocation.probe, True))
     store.remove(dataset.revocation.revoke)
     _verify(evaluator, Expectation(dataset.revocation.probe, False))
+    store.add(dataset.revocation.revoke)
+    delegation = dataset.delegation
+    for probe in (*delegation.probes, delegation.kept):
+        _verify(evaluator, Expectation(probe, True))
+    store.remove(delegation.revoke)
+    for probe in delegation.probes:
+        _verify(evaluator, Expectation(probe, False))
+    _verify(evaluator, Expectation(delegation.kept, True))
 
 
 def _user(index: int) -> ObjectRef:
@@ -56,6 +67,14 @@ def _members(group: ObjectRef) -> SubjectRef:
     return SubjectRef(group, "member")
 
 
+def _authority(principal: ObjectRef) -> ObjectRef:
+    return ObjectRef("group", principal.id)
+
+
+def _agent(path: tuple[int, ...]) -> ObjectRef:
+    return ObjectRef("user", "-".join(("delegation-agent", *map(str, path))))
+
+
 def _popularity(count: int) -> list[float]:
     return list(itertools.accumulate(1 / (rank + 1) for rank in range(count)))
 
@@ -76,11 +95,12 @@ class _Generator:
         self._file_documents()
         revocation = self._revocation_scenario()
         nesting = self._nesting_scenario()
+        delegation = self._delegation_scenario()
         store = RelationshipStore(self._relationships)
         evaluator = ReferenceEvaluator(DOCUMENT_SHARING, store)
         expectations = _Sampler(self._random, self._scale, store, evaluator).sample()
         return Dataset(DOCUMENT_SHARING_NAME, DOCUMENT_SHARING, self._scale, self._seed, tuple(self._relationships),
-                       expectations, revocation, nesting)
+                       expectations, revocation, nesting, delegation)
 
     def _relate(self, resource: ObjectRef, relation: str, subject: SubjectRef) -> Relationship:
         relationship = Relationship(resource, relation, subject)
@@ -154,6 +174,28 @@ class _Generator:
             self._relate(outer, "member", _members(inner))
         self._relate(chain[-1], "member", SubjectRef(leaf))
         return Expectation(CheckQuery(document, "view", leaf), True)
+
+    def _delegation_scenario(self) -> DelegationScenario:
+        person = ObjectRef("user", "delegation-person")
+        folder = ObjectRef("folder", "delegation-root")
+        document = ObjectRef("document", "delegation-target")
+        self._relate(document, "parent", SubjectRef(folder))
+        self._relate(folder, "viewer", _members(_authority(person)))
+        self._relate(_authority(person), "member", SubjectRef(person))
+        delegations = [self._delegate(person, ())]
+        level: list[tuple[int, ...]] = [()]
+        for _ in range(DELEGATION_DEPTH - 1):
+            level = [(*path, index) for path in level for index in range(DELEGATION_FANOUT)]
+            delegations += [self._delegate(_agent(path[:-1]), path) for path in level]
+        probes = tuple(CheckQuery(document, "view", _agent(path)) for path in level)
+        revoke = Relationship(_authority(person), "member", _members(_authority(_agent(()))))
+        return DelegationScenario(person, revoke, probes, tuple(delegations))
+
+    def _delegate(self, delegator: ObjectRef, path: tuple[int, ...]) -> Delegation:
+        delegate = _agent(path)
+        self._relate(_authority(delegator), "member", _members(_authority(delegate)))
+        self._relate(_authority(delegate), "member", SubjectRef(delegate))
+        return Delegation(delegator, delegate)
 
 
 def _verify(evaluator: ReferenceEvaluator, expectation: Expectation) -> None:

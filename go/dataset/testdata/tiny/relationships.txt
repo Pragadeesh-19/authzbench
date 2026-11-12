@@ -3,3 +3,12 @@ folder:revocation-root#viewer@group:revocation-team#member
 document:revocation-target#parent@folder:revocation-root
 document:nesting-target#viewer@user:nesting-leaf
 document:d1#viewer@user:u1
+document:delegation-target#parent@folder:delegation-root
+folder:delegation-root#viewer@group:delegation-person#member
+group:delegation-person#member@user:delegation-person
+group:delegation-person#member@group:delegation-agent#member
+group:delegation-agent#member@user:delegation-agent
+group:delegation-agent#member@group:delegation-agent-0#member
+group:delegation-agent-0#member@user:delegation-agent-0
+group:delegation-agent#member@group:delegation-agent-1#member
+group:delegation-agent-1#member@user:delegation-agent-1

@@ -41,7 +41,7 @@ def nodus_pair(dataset, tmp_path_factory):
 
 
 def test_the_follower_agrees_with_the_reference_once_it_holds_the_load(dataset, nodus_pair):
-    assert verify_conformance(nodus_pair, dataset) == len(dataset.expectations) + 1
+    assert verify_conformance(nodus_pair, dataset) == len(dataset.expectations) + 1 + 28
 
 
 def test_with_the_revoke_s_token_the_first_check_waits_for_the_revoke_and_denies(dataset, nodus_pair):

@@ -29,7 +29,7 @@ def test_a_run_produces_a_document_that_follows_the_schema(dataset):
     document = _document(dataset, CalibrationProfile())
     jsonschema.validate(document, results_schema())
     assert [mode["consistency"] for mode in document["modes"]] == ["fresh", "fastest"]
-    assert document["conformance"]["checks"] == SCALES["S"].checks + 1
+    assert document["conformance"]["checks"] == SCALES["S"].checks + 1 + 28
     assert [baseline["rate_per_second"] for baseline in document["driver_baseline"]] == list(
         SHORT_PLAN.open_loop_rates)
     assert {opened["in_flight"] for mode in document["modes"] for opened in mode["open_loop"]} == {1}
@@ -55,3 +55,17 @@ def test_the_schema_rejects_a_document_with_mismatches(dataset):
     document["conformance"]["mismatches"] = 3
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(document, results_schema())
+
+
+def test_a_delegation_race_is_written_beside_the_revocation_race(dataset):
+    document = _document(dataset, CalibrationProfile(staleness_ns=300 * MILLIS))
+    stale = next(mode for mode in document["modes"] if mode["consistency"] == "fastest")["delegation"]
+    assert (stale["trials"], stale["capped"], stale["staleness_ns"]) == (1, 1, None)
+    assert stale["samples"][0]["allowed_at_cap"] == len(dataset.delegation.probes)
+    assert stale["samples"][0]["leaf_staleness_ns"] is None
+    fresh = next(mode for mode in document["modes"] if mode["consistency"] == "fresh")["delegation"]
+    assert (fresh["trials"], fresh["capped"]) == (3, 0)
+    sample = fresh["samples"][0]
+    assert len(sample["leaf_staleness_ns"]) == len(dataset.delegation.probes)
+    assert sample["staleness_ns"] == max(sample["leaf_staleness_ns"])
+    assert sample["denied_by_ns"] == max(sample["leaf_denied_by_ns"])

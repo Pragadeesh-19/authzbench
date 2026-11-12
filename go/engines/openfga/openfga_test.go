@@ -27,6 +27,10 @@ func TestOpenFGAAgreesWithTheReferenceAndSeesItsOwnRevokeAtHigherConsistency(t *
 	enginetest.AgreesWithTheReferenceAndSeesItsOwnRevokeWhenFresh(t, dial(t))
 }
 
+func TestOpenFGADeniesEveryDelegatedLeafOnItsFirstCheckAtHigherConsistency(t *testing.T) {
+	enginetest.DeniesEveryDelegatedLeafOnItsFirstFreshCheck(t, dial(t))
+}
+
 func TestOpenFGAForgetsWhatAnEarlierLoadLeftBehind(t *testing.T) {
 	enginetest.ForgetsWhatAnEarlierLoadLeftBehind(t, dial(t))
 }

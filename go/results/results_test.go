@@ -70,7 +70,7 @@ func TestARunProducesADocumentThatFollowsTheSchema(t *testing.T) {
 	if document.Modes[0].Revocation.Placement != shortPlan().Placement {
 		t.Fatalf("placement = %q", document.Modes[0].Revocation.Placement)
 	}
-	if document.Conformance.Checks != 3 || len(document.DriverBaseline) != 1 {
+	if document.Conformance.Checks != 6 || len(document.DriverBaseline) != 1 {
 		t.Fatalf("conformance = %+v, baseline = %+v", document.Conformance, document.DriverBaseline)
 	}
 }
@@ -94,6 +94,24 @@ func TestACappedRevocationIsWrittenAsNullStaleness(t *testing.T) {
 	encoded, _ := json.Marshal(stale.Revocation)
 	if !bytes.Contains(encoded, []byte(`"staleness_ns":null`)) {
 		t.Fatalf("revocation = %s", encoded)
+	}
+}
+
+func TestADelegationRaceIsWrittenBesideTheRevocationRace(t *testing.T) {
+	document := run(t, calibration.Profile{StalenessNs: 300 * millis})
+	stale, fresh := document.Modes[1].Delegation, document.Modes[0].Delegation
+	if stale.Trials != 1 || stale.Capped != 1 || stale.StalenessNs != nil || stale.Samples[0].AllowedAtCap != 2 {
+		t.Fatalf("stale delegation = %+v", stale)
+	}
+	encoded, _ := json.Marshal(stale.Samples[0])
+	if !bytes.Contains(encoded, []byte(`"leaf_staleness_ns":null`)) {
+		t.Fatalf("capped sample = %s", encoded)
+	}
+	if fresh.Trials != 3 || fresh.Capped != 0 || len(fresh.Samples[0].LeafStalenessNs) != 2 {
+		t.Fatalf("fresh delegation = %+v", fresh)
+	}
+	if sample := fresh.Samples[0]; *sample.StalenessNs != max(sample.LeafStalenessNs[0], sample.LeafStalenessNs[1]) {
+		t.Fatalf("sample = %+v", sample)
 	}
 }
 

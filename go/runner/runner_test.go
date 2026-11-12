@@ -28,12 +28,12 @@ func tiny(t *testing.T) *dataset.Dataset {
 
 func TestAnEngineThatAgreesWithEveryAnswerPasses(t *testing.T) {
 	data := tiny(t)
-	agreeing := answers{data.Nesting.Query: data.Nesting.Allowed}
-	for _, expectation := range data.Expectations {
+	agreeing := answers{}
+	for _, expectation := range runner.ConformanceExpectations(data) {
 		agreeing[expectation.Query] = expectation.Allowed
 	}
 	checks, err := runner.VerifyConformance(context.Background(), agreeing, data)
-	if err != nil || checks != len(data.Expectations)+1 {
+	if err != nil || checks != len(data.Expectations)+1+len(data.Delegation.Probes)+1 {
 		t.Fatalf("checks = %d, err = %v", checks, err)
 	}
 }
@@ -45,8 +45,8 @@ func TestAnEngineThatDisagreesIsRefusedBeforeTiming(t *testing.T) {
 	if !errors.As(err, &refused) {
 		t.Fatalf("err = %v", err)
 	}
-	allowed := 1
-	for _, expectation := range data.Expectations {
+	allowed := 0
+	for _, expectation := range runner.ConformanceExpectations(data) {
 		if expectation.Allowed {
 			allowed++
 		}

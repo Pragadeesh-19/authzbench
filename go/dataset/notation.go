@@ -18,7 +18,8 @@ func objectPattern(role string) string {
 var (
 	relationshipPattern = regexp.MustCompile(`^` + objectPattern("resource") + `#(?P<relation>` + namePattern + `)@` +
 		objectPattern("subject") + `(?:#(?P<subject_relation>` + namePattern + `))?$`)
-	queryPattern = regexp.MustCompile(`^` + objectPattern("resource") + `#(?P<permission>` + namePattern + `)@` +
+	objectOnlyPattern = regexp.MustCompile(`^` + objectPattern("object") + `$`)
+	queryPattern      = regexp.MustCompile(`^` + objectPattern("resource") + `#(?P<permission>` + namePattern + `)@` +
 		objectPattern("subject") + `$`)
 	answers = map[string]bool{"allow": true, "deny": false}
 )
@@ -106,6 +107,14 @@ func ParseExpectation(line string) (Expectation, error) {
 		return Expectation{}, err
 	}
 	return Expectation{Query: query, Allowed: allowed}, nil
+}
+
+func ParseObject(text string) (Object, error) {
+	groups, ok := match(objectOnlyPattern, text)
+	if !ok {
+		return Object{}, fmt.Errorf("not an object: %q", text)
+	}
+	return object(groups, "object"), nil
 }
 
 func match(pattern *regexp.Regexp, text string) (map[string]string, bool) {
