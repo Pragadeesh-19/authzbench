@@ -33,6 +33,15 @@ def _nodus(_: argparse.Namespace) -> Engine:
     return NodusEngine.in_memory()
 
 
+def _tokens(arguments: argparse.Namespace) -> Engine:
+    from authzbench.engines.tokens import TokenEngine
+
+    if arguments.revocation_cap_seconds <= arguments.token_lifetime_seconds:
+        raise SystemExit(f"authzbench: a token lives {arguments.token_lifetime_seconds:g} s, so the revocation cap "
+                         f"must be longer, not {arguments.revocation_cap_seconds:g} s")
+    return TokenEngine(_seconds(arguments.token_lifetime_seconds))
+
+
 def _nodus_follower(arguments: argparse.Namespace) -> Engine:
     import nodusdb
 
@@ -70,6 +79,7 @@ def _nodus_writer(arguments: argparse.Namespace) -> ServedEngine:
 ENGINES: dict[str, EngineChoice] = {
     "nodus": EngineChoice(_nodus, remote=False),
     "calibration": EngineChoice(lambda _: CalibrationEngine(DEMONSTRATION_PROFILE), remote=False),
+    "tokens": EngineChoice(_tokens, remote=False),
     "nodus-follower": EngineChoice(_nodus_follower, remote=True),
     "remote-calibration": EngineChoice(lambda arguments: RemoteEngine(_required(arguments, "writer")), remote=True),
 }
@@ -190,6 +200,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_command.add_argument("--public-key", type=Path, help="the writer's public signing key")
     run_command.add_argument("--read-wait-seconds", type=float,
                              help="longest a follower check waits for a token; the revocation cap when omitted")
+    run_command.add_argument("--token-lifetime-seconds", type=float, default=60.0,
+                             help="how long the token baseline's access tokens live")
     _add_log_location(run_command)
     run_command.set_defaults(handler=_run)
 

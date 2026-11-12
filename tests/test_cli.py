@@ -81,3 +81,25 @@ def test_a_nodus_writer_and_its_follower_run_as_a_pair(dataset_directory, tmp_pa
     assert [mode["consistency"] for mode in document["modes"]] == ["fresh", "fastest"]
     fresh = document["modes"][0]["revocation"]
     assert all(trial["staleness_ns"] == trial["resolution_ns"] for trial in fresh["samples"])
+
+
+def test_a_token_run_needs_a_cap_longer_than_the_token_lifetime(dataset_directory, tmp_path):
+    with pytest.raises(SystemExit, match="cap must be longer"):
+        run("--engine", "tokens", "--dataset", str(dataset_directory), "--out", str(tmp_path / "out.json"),
+            "--token-lifetime-seconds", "60", "--revocation-cap-seconds", "30")
+
+
+def test_the_token_baseline_revokes_its_tree_within_one_token_lifetime(dataset_directory, tmp_path):
+    jsonschema = pytest.importorskip("jsonschema")
+    from authzbench.results import results_schema
+
+    out = tmp_path / "tokens.json"
+    run("--engine", "tokens", "--dataset", str(dataset_directory), "--out", str(out), *SHORT_RUN,
+        "--token-lifetime-seconds", "0.2")
+    document = json.loads(out.read_text(encoding="utf-8"))
+    jsonschema.validate(document, results_schema())
+    (mode,) = document["modes"]
+    assert mode["consistency"] == "fastest" and "0.2 s lifetime" in mode["mode"]
+    for race in (mode["revocation"], mode["delegation"]):
+        assert (race["trials"], race["capped"]) == (3, 0)
+        assert race["staleness_ns"]["max_ns"] < 400 * MILLIS
