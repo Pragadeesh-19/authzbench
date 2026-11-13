@@ -1,0 +1,12 @@
+recorded_at: 2026-11-13T17:18:40Z
+instance_type: c5.2xlarge
+availability_zone: eu-north-1c
+private_ip: 172.31.3.66
+cpu: Intel(R) Xeon(R) Platinum 8275CL CPU @ 3.00GHz
+vcpus: 8
+memory: 15Gi
+os: Ubuntu 26.04.1 LTS
+kernel: 7.0.0-1016-aws
+python: Python 3.12.12
+authzbench_commit: 3a4007c033f29496b9bc1588425b27c023b5c26c
+nodusdb: 0.1.2

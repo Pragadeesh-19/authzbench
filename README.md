@@ -38,6 +38,31 @@ At 1,000 checks a second SpiceDB and OpenFGA used 93 to 100% of the 8-vCPU machi
 so those columns measure a saturated machine. The [run's README](runs/2026-11-07) lists what to read with care, and
 its folders hold every raw results file, the CPU traces and the machine records.
 
+### Revoking a delegation
+
+The [run of 2026-11-13](runs/2026-11-13) raced the revocation of a delegation tree at size S, 30 times per mode, on
+two c5.2xlarge machines in eu-north-1 with a Xeon Platinum 8275CL, not the 8124M of the run above. It measured
+NodusDB 0.1.2, the same SpiceDB and OpenFGA, and the token baseline. Every engine agreed with the reference evaluator
+first.
+
+| Engine and consistency mode | One check, p50 at 100 checks/s | All 27 leaves denied after, p50 | Longest of 30 |
+|---|---:|---:|---:|
+| NodusDB, in process | 13 µs | 0.18 ms | 0.49 ms |
+| NodusDB follower, with the write's token | 17 µs | never allowed; the first check waits 147 ms for the follower | |
+| NodusDB follower, without a token | 15 µs | 0.15 s | 0.30 s |
+| OpenFGA `HIGHER_CONSISTENCY` | 2.5 ms | 0.32 ms | 0.49 ms |
+| OpenFGA `MINIMIZE_LATENCY`, check cache on | 1.6 ms | 10.0 s | 10.0 s |
+| SpiceDB `at_least_as_fresh` | 2.9 ms | 0.17 ms | 0.21 ms |
+| SpiceDB `fully_consistent` | 3.4 ms | 0.15 ms | 0.68 ms |
+| SpiceDB `minimize_latency` | 2.6 ms | 0.20 s | 5.2 s |
+| Tokens, 5 s lifetime | 63 µs | 0.95 s | 3.9 s |
+| Tokens, 60 s lifetime | 36 µs | 15.1 s | 42.3 s |
+
+The strict modes of SpiceDB and OpenFGA denied every leaf on its first check, as NodusDB did; each of their checks
+crossed the network to a service and its Postgres. Their faster modes, and tokens, kept the revoked tree allowed for
+seconds. NodusDB in process has no network between the check and the data. The [run's README](runs/2026-11-13)
+explains how the two drivers sweep the leaves and lists what else to read with care.
+
 ## Vendor contributions welcome
 
 AuthzBench was written by the author of NodusDB. That is a reason to check our work, and we would rather you did it
