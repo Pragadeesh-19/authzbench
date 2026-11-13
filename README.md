@@ -9,7 +9,8 @@ It measures three things that matter when access is revoked:
 - **Time to revocation**: how long a removed permission keeps being allowed after the write that removed it was
   acknowledged, as a distribution over 30 races per mode.
 - **Time to revoke a delegation**: a person delegates to an agent, which delegates down a tree of 40 agents. The race
-  removes the person's one delegation and times how long until every one of the 27 leaf agents is denied. Beside the
+  removes the person's one delegation and times how long until every one of the 27 leaf agents is denied. Each leaf is
+  checked again no sooner than 50 ms after its previous check, so the tree stays below 540 checks a second. Beside the
   engines it runs a token baseline: short-lived signed tokens, each exchanged from its delegator's and checked locally.
 
 Every engine answers the same schema, generated from one model, over the same seeded dataset, and must agree with a
