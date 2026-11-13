@@ -14,13 +14,14 @@ import (
 )
 
 type Plan struct {
-	ServiceTimeNs    int64
-	OpenLoopRates    []int64
-	OpenLoopNs       int64
-	RevocationCapNs  int64
-	RevocationTrials int
-	InFlight         int
-	Placement        string
+	ServiceTimeNs        int64
+	OpenLoopRates        []int64
+	OpenLoopNs           int64
+	RevocationCapNs      int64
+	RevocationTrials     int
+	DelegationIntervalNs int64
+	InFlight             int
+	Placement            string
 }
 
 type ModeResult struct {
@@ -129,7 +130,7 @@ func measureMode(ctx context.Context, target engine.Engine, data *dataset.Datase
 		return ModeResult{}, err
 	}
 	delegations, err := measure.RaceDelegations(ctx, target, target, data.Delegation, mode.Consistency,
-		plan.RevocationCapNs, plan.RevocationTrials, clock)
+		plan.RevocationCapNs, plan.DelegationIntervalNs, plan.RevocationTrials, clock)
 	if err != nil {
 		return ModeResult{}, err
 	}

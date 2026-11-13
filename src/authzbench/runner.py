@@ -28,6 +28,7 @@ class RunPlan:
     open_loop_ns: int = 10 * NANOS_PER_SECOND
     revocation_cap_ns: int = 30 * NANOS_PER_SECOND
     revocation_trials: int = 30
+    delegation_interval_ns: int = NANOS_PER_SECOND // 20
     placement: str = IN_PROCESS
 
     def __post_init__(self) -> None:
@@ -35,6 +36,8 @@ class RunPlan:
             raise ValueError(f"placement must be one of {', '.join(PLACEMENTS)}, not {self.placement!r}")
         if self.revocation_trials < 1:
             raise ValueError(f"a revocation needs at least one trial, not {self.revocation_trials}")
+        if self.delegation_interval_ns < 0:
+            raise ValueError(f"a delegation interval must not be negative, not {self.delegation_interval_ns}")
 
 
 @dataclass(frozen=True)
@@ -90,7 +93,7 @@ def run(engine: Engine, dataset: Dataset, plan: RunPlan) -> RunResult:
             revocations=race_revocations(engine, engine, dataset.revocation, consistency, plan.revocation_cap_ns,
                                          plan.revocation_trials),
             delegations=race_delegations(engine, engine, dataset.delegation, consistency, plan.revocation_cap_ns,
-                                         plan.revocation_trials),
+                                         plan.revocation_trials, interval_ns=plan.delegation_interval_ns),
             revocation_trials=plan.revocation_trials,
             placement=plan.placement,
         )

@@ -75,6 +75,7 @@ type Revocation struct {
 type Delegation struct {
 	Placement       string               `json:"placement"`
 	CapNs           int64                `json:"cap_ns"`
+	IntervalNs      int64                `json:"interval_ns"`
 	TrialsRequested int                  `json:"trials_requested"`
 	Trials          int                  `json:"trials"`
 	Capped          int                  `json:"capped"`
@@ -155,8 +156,8 @@ func revocation(mode runner.ModeResult) Revocation {
 
 func delegation(mode runner.ModeResult) Delegation {
 	trials := mode.Delegations
-	summary := Delegation{Placement: mode.Placement, CapNs: trials[0].CapNs, TrialsRequested: mode.RevocationTrials,
-		Trials: len(trials)}
+	summary := Delegation{Placement: mode.Placement, CapNs: trials[0].CapNs, IntervalNs: trials[0].IntervalNs,
+		TrialsRequested: mode.RevocationTrials, Trials: len(trials)}
 	var staleness, deniedBy, resolution, write []int64
 	for _, trial := range trials {
 		summary.Samples = append(summary.Samples, DelegationTrial{StalenessNs: trial.StalenessNs(),

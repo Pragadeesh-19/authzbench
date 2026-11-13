@@ -32,13 +32,14 @@ func (r RevocationResult) Capped() bool { return r.StalenessNs == nil }
 
 // DelegationResult is one delegation race: per leaf, the time from the revoke's acknowledgement to the start of its
 // first denying check, and to that check's return. Capped when some leaf was still allowed at the cap; AllowedAtCap
-// says how many.
+// says how many. IntervalNs is the least time between the starts of one leaf's checks.
 type DelegationResult struct {
 	LeafStalenessNs []int64
 	LeafDeniedByNs  []int64
 	ResolutionNs    int64
 	WriteNs         int64
 	CapNs           int64
+	IntervalNs      int64
 	AllowedAtCap    int
 }
 
@@ -88,9 +89,9 @@ func RaceRevocations(ctx context.Context, writer engine.Writer, checker engine.C
 
 // RaceDelegations runs the delegation race up to trials times; a capped trial ends the run, as for revocations.
 func RaceDelegations(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Delegation,
-	consistency engine.Consistency, capNs int64, trials int, clock timing.Clock) ([]DelegationResult, error) {
+	consistency engine.Consistency, capNs, intervalNs int64, trials int, clock timing.Clock) ([]DelegationResult, error) {
 	return repeat(trials, func() (DelegationResult, error) {
-		return RaceDelegation(ctx, writer, checker, scenario, consistency, capNs, clock)
+		return RaceDelegation(ctx, writer, checker, scenario, consistency, capNs, intervalNs, clock)
 	})
 }
 
@@ -201,15 +202,17 @@ func RaceRevocation(ctx context.Context, writer engine.Writer, checker engine.Ch
 	return awaitDenial(ctx, checker, scenario.Probe, consistency, revision, RevocationResult{
 		WriteNs: acknowledged - issued,
 		CapNs:   capNs,
-	}, acknowledged, clock)
+	}, acknowledged, 0, clock)
 }
 
 // RaceDelegation revokes the person's delegation and times, for every leaf agent below it, the first check that
 // denies. Each leaf is checked by its own goroutine, as each agent checks for itself, so a leaf's staleness is not
-// charged the checks of the leaves before it. The race starts once every leaf is allowed, waiting at most the cap in
-// all; the resolution is that of the last leaf to be denied.
+// charged the checks of the leaves before it. Every leaf is checked at once after the acknowledgement, and then no
+// sooner than intervalNs after its previous check started, so the tree's load stays below a service's saturation. The
+// race starts once every leaf is allowed, waiting at most the cap in all; the resolution is that of the last leaf to
+// be denied.
 func RaceDelegation(ctx context.Context, writer engine.Writer, checker engine.Checker, scenario dataset.Delegation,
-	consistency engine.Consistency, capNs int64, clock timing.Clock) (result DelegationResult, err error) {
+	consistency engine.Consistency, capNs, intervalNs int64, clock timing.Clock) (result DelegationResult, err error) {
 	deadline := clock.Now() + capNs
 	for _, probe := range scenario.Probes {
 		if err := awaitGrant(ctx, checker, probe, consistency, deadline-clock.Now(), clock); err != nil {
@@ -235,18 +238,18 @@ func RaceDelegation(ctx context.Context, writer engine.Writer, checker engine.Ch
 		go func() {
 			defer group.Done()
 			leaves[index], failures[index] = awaitDenial(ctx, checker, probe, consistency, revision,
-				RevocationResult{CapNs: capNs}, acknowledged, clock)
+				RevocationResult{CapNs: capNs}, acknowledged, intervalNs, clock)
 		}()
 	}
 	group.Wait()
 	if err := errors.Join(failures...); err != nil {
 		return result, err
 	}
-	return summarizeLeaves(leaves, acknowledged-issued, capNs), nil
+	return summarizeLeaves(leaves, acknowledged-issued, capNs, intervalNs), nil
 }
 
-func summarizeLeaves(leaves []RevocationResult, writeNs, capNs int64) DelegationResult {
-	result := DelegationResult{WriteNs: writeNs, CapNs: capNs}
+func summarizeLeaves(leaves []RevocationResult, writeNs, capNs, intervalNs int64) DelegationResult {
+	result := DelegationResult{WriteNs: writeNs, CapNs: capNs, IntervalNs: intervalNs}
 	staleness, deniedBy := make([]int64, len(leaves)), make([]int64, len(leaves))
 	last := 0
 	for index, leaf := range leaves {
@@ -282,9 +285,11 @@ func awaitGrant(ctx context.Context, checker engine.Checker, probe dataset.Query
 }
 
 func awaitDenial(ctx context.Context, checker engine.Checker, probe dataset.Query, consistency engine.Consistency,
-	revision engine.Revision, result RevocationResult, acknowledged int64, clock timing.Clock) (RevocationResult, error) {
+	revision engine.Revision, result RevocationResult, acknowledged, intervalNs int64,
+	clock timing.Clock) (RevocationResult, error) {
 	previousStart := acknowledged
-	for {
+	for due := acknowledged; ; {
+		clock.WaitUntil(due)
 		started := clock.Now()
 		result.ResolutionNs = started - previousStart
 		if started-acknowledged > result.CapNs {
@@ -299,6 +304,6 @@ func awaitDenial(ctx context.Context, checker engine.Checker, probe dataset.Quer
 			result.StalenessNs, result.DeniedByNs = &staleness, &deniedBy
 			return result, nil
 		}
-		previousStart = started
+		previousStart, due = started, started+intervalNs
 	}
 }

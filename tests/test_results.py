@@ -25,6 +25,11 @@ def _document(dataset, profile: CalibrationProfile) -> dict:
         engine.close()
 
 
+def test_a_negative_delegation_interval_is_refused():
+    with pytest.raises(ValueError, match="must not be negative"):
+        RunPlan(delegation_interval_ns=-1)
+
+
 def test_a_run_produces_a_document_that_follows_the_schema(dataset):
     document = _document(dataset, CalibrationProfile())
     jsonschema.validate(document, results_schema())
@@ -65,6 +70,7 @@ def test_a_delegation_race_is_written_beside_the_revocation_race(dataset):
     assert stale["samples"][0]["leaf_staleness_ns"] is None
     fresh = next(mode for mode in document["modes"] if mode["consistency"] == "fresh")["delegation"]
     assert (fresh["trials"], fresh["capped"]) == (3, 0)
+    assert stale["interval_ns"] == fresh["interval_ns"] == SHORT_PLAN.delegation_interval_ns == 50 * MILLIS
     sample = fresh["samples"][0]
     assert len(sample["leaf_staleness_ns"]) == len(dataset.delegation.probes)
     assert sample["staleness_ns"] == max(sample["leaf_staleness_ns"])

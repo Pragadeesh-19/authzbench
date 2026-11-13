@@ -95,7 +95,7 @@ def test_the_token_baseline_revokes_its_tree_within_one_token_lifetime(dataset_d
 
     out = tmp_path / "tokens.json"
     run("--engine", "tokens", "--dataset", str(dataset_directory), "--out", str(out), *SHORT_RUN,
-        "--token-lifetime-seconds", "0.2")
+        "--token-lifetime-seconds", "0.2", "--delegation-interval-seconds", "0.01")
     document = json.loads(out.read_text(encoding="utf-8"))
     jsonschema.validate(document, results_schema())
     (mode,) = document["modes"]
@@ -103,3 +103,4 @@ def test_the_token_baseline_revokes_its_tree_within_one_token_lifetime(dataset_d
     for race in (mode["revocation"], mode["delegation"]):
         assert (race["trials"], race["capped"]) == (3, 0)
         assert race["staleness_ns"]["max_ns"] < 400 * MILLIS
+    assert mode["delegation"]["interval_ns"] == 10 * MILLIS

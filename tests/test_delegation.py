@@ -70,6 +70,22 @@ def test_a_known_staleness_ends_on_a_known_sweep(dataset, virtual_clock):
     assert result.denied_by_ns == 5026 * CHECK_COST + CHECK_COST
 
 
+def test_an_interval_does_not_delay_a_leaf_s_first_check(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=500 * MILLIS, extra_latency_ns=CHECK_COST)
+    result = race_delegation(engine, engine, dataset.delegation, Consistency.FRESH, SECOND, virtual_clock,
+                             interval_ns=50 * MILLIS)
+    assert result.leaf_staleness_ns == tuple(leaf * CHECK_COST for leaf in range(LEAVES))
+    assert result.interval_ns == 50 * MILLIS
+
+
+def test_a_leaf_is_checked_again_once_its_interval_has_passed(dataset, virtual_clock):
+    engine = _engine(dataset, virtual_clock, staleness_ns=500 * MILLIS, extra_latency_ns=CHECK_COST)
+    result = race_delegation(engine, engine, dataset.delegation, Consistency.FASTEST, SECOND, virtual_clock,
+                             interval_ns=50 * MILLIS)
+    assert result.leaf_staleness_ns == tuple(500 * MILLIS + leaf * CHECK_COST for leaf in range(LEAVES))
+    assert result.resolution_ns == 50 * MILLIS
+
+
 def test_a_tree_still_allowed_at_the_cap_is_capped_with_every_leaf_counted(dataset, virtual_clock):
     engine = _engine(dataset, virtual_clock, staleness_ns=150 * MILLIS, extra_latency_ns=CHECK_COST)
     result = race_delegation(engine, engine, dataset.delegation, Consistency.FASTEST, 100 * MILLIS, virtual_clock)

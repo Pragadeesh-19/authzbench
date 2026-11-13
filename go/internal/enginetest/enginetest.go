@@ -14,7 +14,10 @@ import (
 	"github.com/Pragadeesh-19/authzbench/go/timing"
 )
 
-const revocationCapNs = 30 * timing.NanosPerSecond
+const (
+	revocationCapNs      = 30 * timing.NanosPerSecond
+	delegationIntervalNs = timing.NanosPerSecond / 20
+)
 
 func Endpoint(t *testing.T, variable string) string {
 	t.Helper()
@@ -125,7 +128,7 @@ func DeniesEveryDelegatedLeafOnItsFirstFreshCheck(t *testing.T, target engine.En
 		t.Fatal(err)
 	}
 	result, err := measure.RaceDelegation(ctx, target, target, data.Delegation, engine.Fresh, revocationCapNs,
-		timing.NewSystemClock())
+		delegationIntervalNs, timing.NewSystemClock())
 	if err != nil {
 		t.Fatal(err)
 	}

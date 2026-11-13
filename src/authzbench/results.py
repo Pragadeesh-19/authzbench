@@ -94,6 +94,7 @@ def _delegation(trials: tuple[DelegationResult, ...], requested: int, placement:
     return {
         "placement": placement,
         "cap_ns": trials[0].cap_ns,
+        "interval_ns": trials[0].interval_ns,
         "trials_requested": requested,
         "trials": len(trials),
         "capped": len(trials) - len(seen),

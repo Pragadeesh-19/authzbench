@@ -133,11 +133,12 @@
         "delegation": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["placement", "cap_ns", "trials_requested", "trials", "capped", "staleness_ns", "denied_by_ns",
-                       "resolution_ns", "write_ns", "samples"],
+          "required": ["placement", "cap_ns", "interval_ns", "trials_requested", "trials", "capped", "staleness_ns",
+                       "denied_by_ns", "resolution_ns", "write_ns", "samples"],
           "properties": {
             "placement": {"enum": ["in_process", "same_machine", "second_machine"]},
             "cap_ns": {"type": "integer", "minimum": 1},
+            "interval_ns": {"type": "integer", "minimum": 0},
             "trials_requested": {"type": "integer", "minimum": 1},
             "trials": {"type": "integer", "minimum": 1},
             "capped": {"type": "integer", "minimum": 0},

@@ -64,6 +64,7 @@ type options struct {
 	openLoopSeconds      float64
 	revocationCapSeconds float64
 	revocationTrials     int
+	delegationInterval   float64
 	spicedbEndpoint      string
 	spicedbKey           string
 	spicedbFresh         string
@@ -120,6 +121,8 @@ func parse(arguments []string) (options, error) {
 	flags.Float64Var(&chosen.openLoopSeconds, "open-loop-seconds", 10, "open-loop duration per rate")
 	flags.Float64Var(&chosen.revocationCapSeconds, "revocation-cap-seconds", 30, "longest wait for a revoke")
 	flags.IntVar(&chosen.revocationTrials, "revocation-trials", 30, "revocation races per mode")
+	flags.Float64Var(&chosen.delegationInterval, "delegation-interval-seconds", 0.05,
+		"least time between one delegation leaf's checks")
 	flags.StringVar(&chosen.spicedbEndpoint, "spicedb-endpoint", "localhost:50051", "SpiceDB gRPC address")
 	flags.StringVar(&chosen.spicedbKey, "spicedb-key", "authzbench", "SpiceDB preshared key")
 	flags.StringVar(&chosen.spicedbFresh, "spicedb-fresh", string(spicedb.FullyConsistent),
@@ -138,6 +141,9 @@ func parse(arguments []string) (options, error) {
 	if !slices.Contains(placements, chosen.placement) {
 		return chosen, fmt.Errorf("-placement must be one of %s", strings.Join(placements, ", "))
 	}
+	if chosen.delegationInterval < 0 {
+		return chosen, errors.New("-delegation-interval-seconds must not be negative")
+	}
 	return chosen, nil
 }
 
@@ -151,13 +157,14 @@ func planFrom(chosen options) (runner.Plan, error) {
 		rates = append(rates, rate)
 	}
 	return runner.Plan{
-		ServiceTimeNs:    nanoseconds(chosen.serviceSeconds),
-		OpenLoopRates:    rates,
-		OpenLoopNs:       nanoseconds(chosen.openLoopSeconds),
-		RevocationCapNs:  nanoseconds(chosen.revocationCapSeconds),
-		RevocationTrials: chosen.revocationTrials,
-		InFlight:         chosen.inFlight,
-		Placement:        chosen.placement,
+		ServiceTimeNs:        nanoseconds(chosen.serviceSeconds),
+		OpenLoopRates:        rates,
+		OpenLoopNs:           nanoseconds(chosen.openLoopSeconds),
+		RevocationCapNs:      nanoseconds(chosen.revocationCapSeconds),
+		RevocationTrials:     chosen.revocationTrials,
+		DelegationIntervalNs: nanoseconds(chosen.delegationInterval),
+		InFlight:             chosen.inFlight,
+		Placement:            chosen.placement,
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,12 +17,13 @@ import (
 	"github.com/Pragadeesh-19/authzbench/go/timing"
 )
 
-func delegationRace(t *testing.T, profile calibration.Profile, consistency engine.Consistency, capNs int64,
+func delegationRace(t *testing.T, profile calibration.Profile, consistency engine.Consistency, capNs, intervalNs int64,
 	clock timing.Clock) measure.DelegationResult {
 	t.Helper()
 	data := tinyDataset(t)
 	target := loaded(t, data, profile, clock)
-	result, err := measure.RaceDelegation(context.Background(), target, target, data.Delegation, consistency, capNs, clock)
+	result, err := measure.RaceDelegation(context.Background(), target, target, data.Delegation, consistency, capNs,
+		intervalNs, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,8 +32,8 @@ func delegationRace(t *testing.T, profile calibration.Profile, consistency engin
 
 func TestAFreshCheckDeniesEveryLeafOnItsFirstCheck(t *testing.T) {
 	result := delegationRace(t, calibration.Profile{StalenessNs: 500 * millis, ExtraLatencyNs: checkCost},
-		engine.Fresh, 5*second, &virtualclock.Clock{})
-	if result.Capped() || len(result.LeafStalenessNs) != 2 {
+		engine.Fresh, 5*second, 50*millis, &virtualclock.Clock{})
+	if result.Capped() || len(result.LeafStalenessNs) != 2 || result.IntervalNs != 50*millis {
 		t.Fatalf("result = %+v", result)
 	}
 	for leaf, staleness := range result.LeafStalenessNs {
@@ -47,7 +49,7 @@ func TestAFreshCheckDeniesEveryLeafOnItsFirstCheck(t *testing.T) {
 func TestEveryLeafIsDeniedOnceTheRevokeIsVisible(t *testing.T) {
 	clock := timing.NewSystemClock()
 	started := clock.Now()
-	result := delegationRace(t, calibration.Profile{StalenessNs: 200 * millis}, engine.Fastest, 5*second, clock)
+	result := delegationRace(t, calibration.Profile{StalenessNs: 200 * millis}, engine.Fastest, 5*second, 0, clock)
 	if result.Capped() {
 		t.Fatalf("result = %+v", result)
 	}
@@ -63,7 +65,7 @@ func TestEveryLeafIsDeniedOnceTheRevokeIsVisible(t *testing.T) {
 
 func TestATreeStillAllowedAtTheCapCountsEveryLeaf(t *testing.T) {
 	result := delegationRace(t, calibration.Profile{StalenessNs: 150 * millis, ExtraLatencyNs: checkCost},
-		engine.Fastest, 100*millis, &virtualclock.Clock{})
+		engine.Fastest, 100*millis, 0, &virtualclock.Clock{})
 	if !result.Capped() || result.AllowedAtCap != 2 || result.StalenessNs() != nil || result.DeniedByNs() != nil {
 		t.Fatalf("result = %+v", result)
 	}
@@ -76,7 +78,7 @@ func TestACappedDelegationTrialEndsTheTrials(t *testing.T) {
 	data, clock := tinyDataset(t), &virtualclock.Clock{}
 	target := loaded(t, data, calibration.Profile{StalenessNs: 300 * millis, ExtraLatencyNs: checkCost}, clock)
 	trials, err := measure.RaceDelegations(context.Background(), target, target, data.Delegation, engine.Fastest,
-		100*millis, 30, clock)
+		100*millis, 0, 30, clock)
 	if err != nil || len(trials) != 1 || !trials[0].Capped() {
 		t.Fatalf("trials = %+v, err = %v", trials, err)
 	}
@@ -86,7 +88,7 @@ func TestTheDelegationRaceRestoresTheDelegation(t *testing.T) {
 	data, clock := tinyDataset(t), &virtualclock.Clock{}
 	target := loaded(t, data, calibration.Profile{ExtraLatencyNs: checkCost}, clock)
 	if _, err := measure.RaceDelegation(context.Background(), target, target, data.Delegation, engine.Fresh, second,
-		clock); err != nil {
+		0, clock); err != nil {
 		t.Fatal(err)
 	}
 	for _, probe := range data.Delegation.Probes {
@@ -103,7 +105,8 @@ func TestALeafDeniedBeforeTheRevokeIsRefused(t *testing.T) {
 		Relationship: data.Delegation.Revoke}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := measure.RaceDelegation(context.Background(), target, target, data.Delegation, engine.Fresh, second, clock)
+	_, err := measure.RaceDelegation(context.Background(), target, target, data.Delegation, engine.Fresh, second, 0,
+		clock)
 	if err == nil || !strings.Contains(err.Error(), "denied before the revoke") {
 		t.Fatalf("err = %v", err)
 	}
@@ -135,7 +138,7 @@ func TestEveryLeafIsCheckedAtTheSameTime(t *testing.T) {
 	target := loaded(t, data, calibration.Profile{}, clock)
 	checker := &meetsTheOtherLeaves{inner: target, leaves: int64(len(data.Delegation.Probes))}
 	result, err := measure.RaceDelegation(context.Background(), target, checker, data.Delegation, engine.Fresh,
-		10*second, clock)
+		10*second, 0, clock)
 	if err != nil || result.Capped() {
 		t.Fatalf("result = %+v, err = %v", result, err)
 	}
@@ -180,11 +183,53 @@ func TestTheResolutionIsThatOfTheLastLeafDenied(t *testing.T) {
 	target := loaded(t, data, calibration.Profile{}, clock)
 	checker := &slowToDeny{inner: target, clock: clock, leaf: data.Delegation.Probes[1], answered: make(chan struct{}, 1)}
 	result, err := measure.RaceDelegation(context.Background(), target, checker, data.Delegation, engine.Fresh, second,
-		clock)
+		0, clock)
 	if err != nil || result.Capped() {
 		t.Fatalf("result = %+v, err = %v", result, err)
 	}
 	if *result.StalenessNs() != 30*millis || result.ResolutionNs != 10*millis || result.LeafStalenessNs[0] != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+type checkStarts struct {
+	inner  engine.Checker
+	clock  timing.Clock
+	lock   sync.Mutex
+	starts map[dataset.Query][]int64
+}
+
+func (c *checkStarts) Check(ctx context.Context, query dataset.Query, consistency engine.Consistency,
+	after engine.Revision) (bool, error) {
+	if after != nil {
+		c.lock.Lock()
+		c.starts[query] = append(c.starts[query], c.clock.Now())
+		c.lock.Unlock()
+	}
+	return c.inner.Check(ctx, query, consistency, after)
+}
+
+func TestALeafIsCheckedAgainNoSoonerThanTheInterval(t *testing.T) {
+	data, clock := tinyDataset(t), timing.NewSystemClock()
+	target := loaded(t, data, calibration.Profile{StalenessNs: 200 * millis}, clock)
+	checker := &checkStarts{inner: target, clock: clock, starts: map[dataset.Query][]int64{}}
+	result, err := measure.RaceDelegation(context.Background(), target, checker, data.Delegation, engine.Fastest,
+		5*second, 50*millis, clock)
+	if err != nil || result.Capped() {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	for _, probe := range data.Delegation.Probes {
+		starts := checker.starts[probe]
+		if len(starts) < 2 {
+			t.Fatalf("%s was checked %d times in 200 ms", probe, len(starts))
+		}
+		for index := 1; index < len(starts); index++ {
+			if gap := starts[index] - starts[index-1]; gap < 49*millis {
+				t.Fatalf("%s was checked again %d ns after its previous check", probe, gap)
+			}
+		}
+	}
+	if result.ResolutionNs < 50*millis || *result.StalenessNs() < 200*millis {
 		t.Fatalf("result = %+v", result)
 	}
 }

@@ -64,6 +64,7 @@ func TestTheCommandRefusesWhatItCannotMeasure(t *testing.T) {
 		"a zero rate":                 {"-rates", "0"},
 		"no check in flight":          {"-in-flight", "0"},
 		"OpenFGA without its version": {"-engine", "openfga"},
+		"a negative interval":         {"-delegation-interval-seconds", "-0.05"},
 	} {
 		arguments, _ := tinyArguments(t, extra...)
 		if err := run(context.Background(), arguments); err == nil {

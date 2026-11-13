@@ -24,7 +24,8 @@ var schemaPath = filepath.Join("..", "..", "src", "authzbench", "results.schema.
 
 func shortPlan() runner.Plan {
 	return runner.Plan{ServiceTimeNs: 100 * millis, OpenLoopRates: []int64{500}, OpenLoopNs: 200 * millis,
-		RevocationCapNs: 100 * millis, RevocationTrials: 3, InFlight: 1, Placement: "same_machine"}
+		RevocationCapNs: 100 * millis, RevocationTrials: 3, DelegationIntervalNs: 20 * millis, InFlight: 1,
+		Placement: "same_machine"}
 }
 
 func run(t *testing.T, profile calibration.Profile) results.Document {
@@ -107,7 +108,8 @@ func TestADelegationRaceIsWrittenBesideTheRevocationRace(t *testing.T) {
 	if !bytes.Contains(encoded, []byte(`"leaf_staleness_ns":null`)) {
 		t.Fatalf("capped sample = %s", encoded)
 	}
-	if fresh.Trials != 3 || fresh.Capped != 0 || len(fresh.Samples[0].LeafStalenessNs) != 2 {
+	if fresh.Trials != 3 || fresh.Capped != 0 || len(fresh.Samples[0].LeafStalenessNs) != 2 ||
+		fresh.IntervalNs != 20*millis || stale.IntervalNs != 20*millis {
 		t.Fatalf("fresh delegation = %+v", fresh)
 	}
 	if sample := fresh.Samples[0]; *sample.StalenessNs != max(sample.LeafStalenessNs[0], sample.LeafStalenessNs[1]) {
